@@ -37,3 +37,6 @@
 [submodule "drivers/intel-igc"]
 	path = drivers/intel-igc
 	url = git@github.com:xcp-ng-rpms/intel-igc.git
+[submodule "drivers/intel-ixgbe"]
+	path = drivers/intel-ixgbe
+	url = git@github.com:xcp-ng-rpms/intel-ixgbe.git
