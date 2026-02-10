@@ -31,3 +31,6 @@
 [submodule "drivers/intel-ice"]
 	path = drivers/intel-ice
 	url = git@github.com:xcp-ng-rpms/intel-ice.git
+[submodule "drivers/intel-igb"]
+	path = drivers/intel-igb
+	url = git@github.com:xcp-ng-rpms/intel-igb.git
