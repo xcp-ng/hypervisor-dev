@@ -4,3 +4,6 @@
 [submodule "drivers/avago-mpt3sas"]
 	path = drivers/avago-mpt3sas
 	url = git@github.com:xcp-ng-rpms/avago-mpt3sas.git
+[submodule "drivers/broadcom-bnxt-en"]
+	path = drivers/broadcom-bnxt-en
+	url = git@github.com:xcp-ng-rpms/broadcom-bnxt-en.git
