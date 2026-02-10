@@ -46,3 +46,6 @@
 [submodule "drivers/mellanox-mlnxen"]
 	path = drivers/mellanox-mlnxen
 	url = git@github.com:xcp-ng-rpms/mellanox-mlnxen.git
+[submodule "drivers/microsemi-smartpqi"]
+	path = drivers/microsemi-smartpqi
+	url = git@github.com:xcp-ng-rpms/microsemi-smartpqi.git
