@@ -4,32 +4,66 @@
 # symbols used by the drivers we ship as binary kernel modules.
 #
 # Run like this:
-#  ./generate_locked_list.sh <OUTPUT_FILE>
+#  ./generate_locked_list.sh [OPTIONS] <OUTPUT_FILE>
+#
+# Options:
+#   --no-checks          Skip git remote and status checks
+#   --skip-driver-build  Skip building drivers in containers
 
-OUTPUT_FILE="$1"
+NO_CHECKS=false
+SKIP_BUILD=false
+OUTPUT_FILE=""
 
-VATES_REMOTE="$(git remote -v | grep github.com | grep xcp-ng | awk '{print $1}')"
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-checks)
+            NO_CHECKS=true
+            shift
+            ;;
+        --skip-driver-build)
+            SKIP_BUILD=true
+            shift
+            ;;
+        *)
+            OUTPUT_FILE="$1"
+            shift
+            ;;
+    esac
+done
 
-git fetch ${VATES_REMOTE}
-
-if [[ $(git rev-parse HEAD) -ne $(git rev-parse ${VATES_REMOTE}/master) ]] ; then
-    echo "Repository's HEAD is not up-to-date with ${VATES_REMOTE}/master"
+if [[ -z "$OUTPUT_FILE" ]]; then
+    echo "Error: OUTPUT_FILE is required"
+    echo "Usage: $0 [--no-checks] [--skip-driver-build] <OUTPUT_FILE>"
     exit 1
 fi
 
-if [[ -n $(git status) ]]; then
-    echo "Repository has uncommitted changes"
-    exit 1
+if [[ "$NO_CHECKS" == false ]]; then
+    VATES_REMOTE="$(git remote -v | grep github.com | grep xcp-ng | awk '{print $1}')"
+
+    git fetch ${VATES_REMOTE}
+
+    if [[ $(git rev-parse HEAD) -ne $(git rev-parse ${VATES_REMOTE}/master) ]] ; then
+        echo "Repository's HEAD is not up-to-date with ${VATES_REMOTE}/master"
+        exit 1
+    fi
+
+    if [[ -n $(git status) ]]; then
+        echo "Repository has uncommitted changes"
+        exit 1
+    fi
 fi
 
-git submodule foreach "
-    cd \${path}
-    xcp-ng-dev container build 8.3 ./
-"
+if [[ "$SKIP_BUILD" == false ]]; then
+    git submodule foreach "
+        xcp-ng-dev container build 8.3 ./
+    "
+fi
 
-git submodule foreach "
-    echo \"[\${name}]\"
-    for module in \$(find \${path} -name \\*.ko); do
+git submodule --quiet foreach "
+    set -eu
+    echo \"[\$(basename \${name})]\"
+    for module in \$(find ./ -name \\*.ko); do
     	objdump -t \${module} | awk '/UND/{print \"\t\" \$NF}'
     done | sort -u
 " > "${OUTPUT_FILE}"
