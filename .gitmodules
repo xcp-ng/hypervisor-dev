@@ -16,3 +16,6 @@
 [submodule "drivers/cisco-fnic"]
 	path = drivers/cisco-fnic
 	url = git@github.com:xcp-ng-rpms/cisco-fnic.git
+[submodule "drivers/emulex-lpfc"]
+	path = drivers/emulex-lpfc
+	url = git@github.com:xcp-ng-rpms/emulex-lpfc.git
