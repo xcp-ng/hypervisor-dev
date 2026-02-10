@@ -7,3 +7,6 @@
 [submodule "drivers/broadcom-bnxt-en"]
 	path = drivers/broadcom-bnxt-en
 	url = git@github.com:xcp-ng-rpms/broadcom-bnxt-en.git
+[submodule "drivers/chelsio-cxgb4"]
+	path = drivers/chelsio-cxgb4
+	url = git@github.com:xcp-ng-rpms/chelsio-cxgb4.git
