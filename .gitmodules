@@ -43,3 +43,6 @@
 [submodule "drivers/microsemi-aacraid"]
 	path = drivers/microsemi-aacraid
 	url = git@github.com:xcp-ng-rpms/microsemi-aacraid.git
+[submodule "drivers/mellanox-mlnxen"]
+	path = drivers/mellanox-mlnxen
+	url = git@github.com:xcp-ng-rpms/mellanox-mlnxen.git
