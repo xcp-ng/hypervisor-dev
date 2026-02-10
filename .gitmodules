@@ -58,3 +58,6 @@
 [submodule "drivers/qlogic-qla2xxx"]
 	path = drivers/qlogic-qla2xxx
 	url = git@github.com:xcp-ng-rpms/qlogic-qla2xxx.git
+[submodule "drivers/aqc111u-module"]
+	path = drivers/aqc111u-module
+	url = git@github.com:xcp-ng-rpms/aqc111u-module.git
