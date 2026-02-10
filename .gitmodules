@@ -10,3 +10,6 @@
 [submodule "drivers/chelsio-cxgb4"]
 	path = drivers/chelsio-cxgb4
 	url = git@github.com:xcp-ng-rpms/chelsio-cxgb4.git
+[submodule "drivers/cisco-enic"]
+	path = drivers/cisco-enic
+	url = git@github.com:xcp-ng-rpms/cisco-enic.git
