@@ -1,3 +1,6 @@
 [submodule "avago-megaraid-sas"]
 	path = drivers/avago-megaraid-sas
 	url = git@github.com:xcp-ng-rpms/avago-megaraid-sas.git
+[submodule "drivers/avago-mpt3sas"]
+	path = drivers/avago-mpt3sas
+	url = git@github.com:xcp-ng-rpms/avago-mpt3sas.git
