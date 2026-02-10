@@ -61,3 +61,6 @@
 [submodule "drivers/aqc111u-module"]
 	path = drivers/aqc111u-module
 	url = git@github.com:xcp-ng-rpms/aqc111u-module.git
+[submodule "drivers/dell-rbu-module"]
+	path = drivers/dell-rbu-module
+	url = git@github.com:xcp-ng-rpms/dell-rbu-module.git
