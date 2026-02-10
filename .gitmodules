@@ -64,3 +64,6 @@
 [submodule "drivers/dell-rbu-module"]
 	path = drivers/dell-rbu-module
 	url = git@github.com:xcp-ng-rpms/dell-rbu-module.git
+[submodule "drivers/igc-module"]
+	path = drivers/igc-module
+	url = git@github.com:xcp-ng-rpms/igc-module.git
