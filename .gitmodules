@@ -49,3 +49,6 @@
 [submodule "drivers/microsemi-smartpqi"]
 	path = drivers/microsemi-smartpqi
 	url = git@github.com:xcp-ng-rpms/microsemi-smartpqi.git
+[submodule "drivers/qlogic-fastlinq"]
+	path = drivers/qlogic-fastlinq
+	url = git@github.com:xcp-ng-rpms/qlogic-fastlinq.git
