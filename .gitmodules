@@ -55,3 +55,6 @@
 [submodule "drivers/qlogic-netxtreme2"]
 	path = drivers/qlogic-netxtreme2
 	url = git@github.com:xcp-ng-rpms/qlogic-netxtreme2.git
+[submodule "drivers/qlogic-qla2xxx"]
+	path = drivers/qlogic-qla2xxx
+	url = git@github.com:xcp-ng-rpms/qlogic-qla2xxx.git
