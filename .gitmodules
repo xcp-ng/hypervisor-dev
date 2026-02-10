@@ -28,3 +28,6 @@
 [submodule "drivers/intel-i40e"]
 	path = drivers/intel-i40e
 	url = git@github.com:xcp-ng-rpms/intel-i40e.git
+[submodule "drivers/intel-ice"]
+	path = drivers/intel-ice
+	url = git@github.com:xcp-ng-rpms/intel-ice.git
