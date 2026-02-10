@@ -52,3 +52,6 @@
 [submodule "drivers/qlogic-fastlinq"]
 	path = drivers/qlogic-fastlinq
 	url = git@github.com:xcp-ng-rpms/qlogic-fastlinq.git
+[submodule "drivers/qlogic-netxtreme2"]
+	path = drivers/qlogic-netxtreme2
+	url = git@github.com:xcp-ng-rpms/qlogic-netxtreme2.git
