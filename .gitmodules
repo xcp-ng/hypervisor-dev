@@ -67,3 +67,6 @@
 [submodule "drivers/igc-module"]
 	path = drivers/igc-module
 	url = git@github.com:xcp-ng-rpms/igc-module.git
+[submodule "drivers/mpi3mr-module"]
+	path = drivers/mpi3mr-module
+	url = git@github.com:xcp-ng-rpms/mpi3mr-module.git
