@@ -22,3 +22,6 @@
 [submodule "drivers/intel-e1000e"]
 	path = drivers/intel-e1000e
 	url = git@github.com:xcp-ng-rpms/intel-e1000e.git
+[submodule "drivers/intel-fm10k"]
+	path = drivers/intel-fm10k
+	url = git@github.com:xcp-ng-rpms/intel-fm10k.git
