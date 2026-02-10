@@ -19,3 +19,6 @@
 [submodule "drivers/emulex-lpfc"]
 	path = drivers/emulex-lpfc
 	url = git@github.com:xcp-ng-rpms/emulex-lpfc.git
+[submodule "drivers/intel-e1000e"]
+	path = drivers/intel-e1000e
+	url = git@github.com:xcp-ng-rpms/intel-e1000e.git
