@@ -40,3 +40,6 @@
 [submodule "drivers/intel-ixgbe"]
 	path = drivers/intel-ixgbe
 	url = git@github.com:xcp-ng-rpms/intel-ixgbe.git
+[submodule "drivers/microsemi-aacraid"]
+	path = drivers/microsemi-aacraid
+	url = git@github.com:xcp-ng-rpms/microsemi-aacraid.git
