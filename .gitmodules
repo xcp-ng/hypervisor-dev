@@ -25,3 +25,6 @@
 [submodule "drivers/intel-fm10k"]
 	path = drivers/intel-fm10k
 	url = git@github.com:xcp-ng-rpms/intel-fm10k.git
+[submodule "drivers/intel-i40e"]
+	path = drivers/intel-i40e
+	url = git@github.com:xcp-ng-rpms/intel-i40e.git
