@@ -18,7 +18,6 @@
       - [If no](#if-no)
     - [Create a branch from the rebased HEAD](#create-a-branch-from-the-rebased-head)
     - [Build Kernel RPMs](#build-kernel-rpms)
-      - [Commit src RPMs changes](#commit-src-rpms-changes)
       - [Update the origin tarball](#update-the-origin-tarball)
         - [Download](#download)
         - [Verify the signature of your tarball:](#verify-the-signature-of-your-tarball)
@@ -30,11 +29,14 @@
           - [kABI breaking changes](#kabi-breaking-changes)
     - [Verify source RPM generate the same sources](#verify-source-rpm-generate-the-same-sources)
   - [Review your rebase](#review-your-rebase)
+    - [Dropped commits on the rebase have a reason](#dropped-commits-on-the-rebase-have-a-reason)
+    - [Patch-ids changes have a reason documented](#patch-ids-changes-have-a-reason-documented)
+    - [Special care for added commits](#special-care-for-added-commits)
   - [Look for kABI breakage](#look-for-kabi-breakage)
     - [Build kernel RPMs from before the rebase](#build-kernel-rpms-from-before-the-rebase)
     - [Repeat process for the rebased kernel](#repeat-process-for-the-rebased-kernel)
     - [Check if symbols we care about have been modified](#check-if-symbols-we-care-about-have-been-modified)
-  - [How to fix kABI breakage](#how-to-fix-kabi-breakage)
+  - [[WiP] How to fix kABI breakage](#wip-how-to-fix-kabi-breakage)
     - [Identify breaking commit](#identify-breaking-commit)
     - [Unknown to full definition](#unknown-to-full-definition)
     - [Struct fields changes](#struct-fields-changes)
@@ -83,7 +85,7 @@ sub-modules properly initialized as a pre-requisite step.
 
 ```bash
 git pull --rebase origin master
-git submodules --init
+git submodule --init
 ```
 
 ## Add the new RPM repo as sub-module
@@ -172,7 +174,33 @@ git log --oneline --right-only --grep "<title_goes_here>" ${prev_branch}...HEAD
 
 Drop the patch `git rebase --skip` and comment the patch from the list of
 patches in the `SPECS/kernel.spec` file, referencing the upstream sha1 of
-the commit.
+the commit, e.g.:
+
+```diff
+diff --git a/SPECS/kernel.spec b/SPECS/kernel.spec
+index 181b3a467d87..5997a384f4ef 100644
+--- a/SPECS/kernel.spec
++++ b/SPECS/kernel.spec
+@@ -79,23 +79,23 @@ Provides: kernel-%{_arch} = %{version}-%{release}
+
+ Source0: kernel-4.19.19.tar.gz
+ Source1: kernel-x86_64.config
+ Source2: macros.kernel
+-Patch0: 0001-Fix-net-ipv4-do-not-handle-duplicate-fragments-as-ov.patch
+-Patch1: 0001-xen-privcmd-allow-fetching-resource-sizes.patch
+-Patch2: 0001-block-genhd-add-groups-argument-to-device_add_disk.patch
+-Patch3: 0002-nvme-register-ns_id-attributes-as-default-sysfs-grou.patch
+-Patch4: 0001-mm-zero-remaining-unavailable-struct-pages.patch
+-Patch5: 0002-mm-return-zero_resv_unavail-optimization.patch
+-Patch6: 0001-mm-page_alloc.c-fix-uninitialized-memmaps-on-a-parti.patch
++# Patch0: 0001-Fix-net-ipv4-do-not-handle-duplicate-fragments-as-ov.patch: c763a3cf502 Fix "net: ipv4: do not handle duplicate fragments as overlapping"
++# Patch1: 0001-xen-privcmd-allow-fetching-resource-sizes.patch: d8099663adc9 xen/privcmd: allow fetching resource sizes
++# Patch2: 0001-block-genhd-add-groups-argument-to-device_add_disk.patch: 1bf6a186c452 block: genhd: add 'groups' argument to device_add_disk
++# Patch3: 0002-nvme-register-ns_id-attributes-as-default-sysfs-grou.patch: ea7ac82cf4d8 nvme: register ns_id attributes as default sysfs groups
++# Patch4: 0001-mm-zero-remaining-unavailable-struct-pages.patch: 9ac5917a1d28 mm: zero remaining unavailable struct pages
++# Patch5: 0002-mm-return-zero_resv_unavail-optimization.patch: f19a50c1e3ba mm: return zero_resv_unavail optimization
++# Patch6: 0001-mm-page_alloc.c-fix-uninitialized-memmaps-on-a-parti.patch: 0a69047d8235 mm/page_alloc.c: fix uninitialized memmaps on a partially populated last section
+```
 
 #### If no
 
@@ -195,26 +223,40 @@ cp 0001-xen-blkback-fix.patch /path/to/rpm/repo/SOURCES/0001-xen-blkback-fix-reb
                                                                              ^^^^^^^^^^^^^^^^^^^
 ```
 
+
 Then update the `PatchXXXX 0001-xen-blkback-fix.patch` line in the
-`SPECS/kernel.spec` file.  And carry on your rebase with `git rebase
---cont`.
+`SPECS/kernel.spec` file, e.g.:
+
+```diff
+diff --git a/SPECS/kernel.spec b/SPECS/kernel.spec
+index 181b3a467d87..5997a384f4ef 100644
+--- a/SPECS/kernel.spec
++++ b/SPECS/kernel.spec
+## -162,6 +162,6 @@  Patch75: 0002-gfs2-clean_journal-improperly-set-sd_log_flush_head.patch
+ Patch76: 0001-gfs2-Replace-gl_revokes-with-a-GLF-flag.patch
+ Patch77: 0005-gfs2-Remove-misleading-comments-in-gfs2_evict_inode.patch
+-Patch78: 0006-gfs2-Rename-sd_log_le_-revoke-ordered.patch
++Patch78: 0001-gfs2-Rename-sd_log_le_-revoke-ordered-rebase-325.patch
+ Patch79: 0007-gfs2-Rename-gfs2_trans_-add_unrevoke-remove_revoke.patch
+ Patch80: 0001-iomap-Clean-up-__generic_write_end-calling.patch
+```
+
+And carry on your rebase with `git rebase --cont`.
 
 ### Create a branch from the rebased HEAD
 
 Once your initial rebase is done, create a branch from your HEAD commit:
 
 ```bash
-cd /path/to/linux/repo
+cd /path/to/source/repo
 git checkout -B <your-name>-rebase-to-4.19.325
 ```
 
 ### Build Kernel RPMs
 
-#### Commit src RPMs changes
-
-Once the rebase is finished, it is time to build the kernel RPMs.  Make
-sure all changes to the `SPECS/kernel.spec` file are committed and that any
-modified patches are also added.
+Make sure all changes to the `SPECS/kernel.spec` file are committed and
+that any modified patches are also added at this point (`git status -u`
+ftw).
 
 #### Update the origin tarball
 
@@ -291,7 +333,23 @@ Commit as usual the resulting changes.
 > kernel.org, and will untar inside `kernel-<Version>` whereas tarballs
 > from kernel.org will untar inside `linux-<Version>`.  You can specify the
 > format on the `%autosetup` line from the `%prep` step, using the `-n`
-> option, e.g.: `%autosetup -p1 -n linux-${version}`
+> option, e.g.:
+>
+> ```diff
+> diff --git a/SPECS/kernel.spec b/SPECS/kernel.spec
+> index 5997a384f4ef..1778746e2c86 100644
+> --- a/SPECS/kernel.spec
+> +++ b/SPECS/kernel.spec
+> @@ -787,7 +787,7 @@ Provides: python2-perf
+>  %{pythonperfdesc}
+>
+>  %prep
+> -%autosetup -p1
+> +%autosetup -p1 -n linux-%{version}
+>  %{?_cov_prepare}
+>
+>  %build
+> ```
 
 #### Build the kernel RPMs
 
@@ -354,7 +412,7 @@ terminal find the container id and copy the config file from it:
 docker ps
 
 # Copy the .config
-docker cp <container_id>:/home/builder/rpmbuild/BUILD/linux-4.19.325/.config /path/to/src/rpm/repo/SOURCES/kernel-x86-64.config
+docker cp <container_id>:/home/builder/rpmbuild/BUILD/linux-4.19.325/.config /path/to/rpm/repo/SOURCES/kernel-x86-64.config
 
 ```
 
@@ -379,7 +437,7 @@ Once your rebase is done and your RPM builds just fine, it is important to
 verify that your src RPM will generate the same sources.
 
 ```bash
-cd /path/to/src/rpm/repo
+cd /path/to/rpm/repo
 git commit -s -m "kernel: rebase to v4.19.325"
 ~/path/to/xcp/repo/scripts/git-import-srpm HEAD
 ```
@@ -390,13 +448,58 @@ zero diffs.
 
 ## Review your rebase
 
-TODO: point to `git-review-rebase` and develop those topics:
+[TODO] point to `git-review-rebase` and develop those topics:
 
-- Dropped commits on the rebase have a reason
-- Commits which patch-ids have changed (i.e. there were conflicts) have an
-  explanation added to the commit description
-- Commits *added* are not coming from a reverted commit in the new onto
-  point (likely signaling we shouldn't re-apply it)
+### Dropped commits on the rebase have a reason
+
+There maybe commits that were present on the previous branch that simply do
+not apply on top of the new onto point.  These are not to be confused with
+commits that were present in the initial rebased range and that were
+dropped during the rebase because an equivalent commit was present as
+ancestor of the new onto point, as those should not show as dropped in the
+`git-review-rebase` TUI, instead they'll show as matched to their
+equivalent commit.
+
+Dropped commits need to have a comment added to them through the
+`git-review-rebase` command (which is using `git notes` internally to
+save/show them) explaining why a commit disappeared from the rebase, e.g.:
+
+```text
+commit ab8c1257dd2213bbf9b0ef603bc50398d6bd0e80
+Author: Thierry Escande <thierry.escande@vates.tech>
+Date:   Wed Jun 12 14:47:11 2024 +0200
+
+    Backport tg3 driver code from kernel v4.19.315
+
+Notes:
+    Quentin: Latest tg3 driver included in v4.19.325 rebase.
+```
+
+Here there were no single commit to be matched in the new branch because
+the commit from the previous branch was a massive squash, as such it
+appears as "dropped", and the reason is documented.
+
+### Patch-ids changes have a reason documented
+
+Most patch-ids changes imply there was a conflict during the rebase, as
+such, a clear explanation as to what was the conflict as well _why_ there
+was a conflict (i.e. pointing to the commit in the new onto that lead to
+the conflict) MUST be present in the commit description to facilitate
+reviews and document the problems.
+
+The reviewer will be able to "replay" the rebase of the particular commit
+using `git-rebase-review` to compare their resolution with yours.
+
+### Special care for added commits
+
+> [!WARNING]
+>
+> Seeing an added commit at this point of the process should not happen, it
+> is very likely pointing to a commit that was applied AND reverted on the
+> new onto point, allowing it to be applied again.  Reverts are here for a
+> reason, so this needs investigation and likely dropping the commit on the
+> rebase because it was either deemed buggy or was superceded by a commit
+> fixing differently (hopefully in a better way) the same issue.
 
 ## Look for kABI breakage
 
@@ -417,7 +520,7 @@ introduced the kABI changes.  To learn more about this, you can read the
 >
 > The Symtypes file for the currently released kernel should already be
 > present in the `kernel-abis/` directory so this step might be skippable.
-> OTOG, doing it is not that long and allows you to have a `vmlinux.o` from
+> OTOH, doing it is not that long and allows you to have a `vmlinux.o` from
 > the currently released kernel which will be useful along with `pahole` to
 > correct kABI changes.
 
@@ -443,7 +546,7 @@ Save the build directory for later (it contains vmlinux.o which we will
 need to get dwarf information on types):
 
 ```bash
-cp -r /path/to/rpm/repo/BUILD/kernel-4.19.19 ./
+cp -r /path/to/rpm/repo/BUILD/kernel-4.19.19 /tmp/
 ```
 
 ### Repeat process for the rebased kernel
@@ -459,7 +562,7 @@ xcp-ng-dev container build 8.3 ./
 Collect all the types information:
 
 ```bash
-./scripts/kabi collect /path/to/rpm/repo/BUILD/kernel-4.19.325 --output ./kernel-abis/Symtypes.build-v4.19.325
+./scripts/kabi collect /path/to/rpm/repo/BUILD/linux-4.19.325 --output ./kernel-abis/Symtypes.build-v4.19.325
 ```
 
 Minimize the Symtypes file to only include symbols that are used by binary
@@ -469,10 +572,10 @@ drivers we are shipping.
 ./scripts/kabi consolidate --kabi ./kernel-abis/xcpng-8.3-kabi_lockedlist --input ./kernel-abis/Symtypes.build-4.19.325 --output ./kernel-abis/Modules.kabi-4.19.325
 ```
 
-Save the build directory:
+Save the build directory for later use with `pahole`:
 
 ```bash
-cp -r /path/to/rpm/repo/BUILD/linux-4.19.325 ./
+cp -r /path/to/rpm/repo/BUILD/linux-4.19.325 /tmp/
 ```
 
 
@@ -521,7 +624,7 @@ Typical output will look like this:
 Each change will require either a kABI fix, if possible, or reverting the
 patch that introduced the change.
 
-## How to fix kABI breakage
+## [WiP] How to fix kABI breakage
 
 ### Identify breaking commit
 
@@ -556,7 +659,7 @@ you were working on in the source repo.  If all is good, you can push your
 src rpm repo branch, and trigger a scratch build:
 
 ```bash
-koji_build.py --scractch v8.3-incoming .
+koji_build.py --scratch v8.3-incoming .
 ```
 
 Monitor for build errors as usual, and if all is good, time for testing
