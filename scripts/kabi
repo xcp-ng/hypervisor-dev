@@ -3,6 +3,7 @@
 Tool for checking kABI and providing diagnostics when kABI is broken.
 See Documentation/uek/kabi.txt for usage instructions, or try "kabi -h".
 """
+
 from __future__ import print_function
 
 import argparse
@@ -150,7 +151,7 @@ class SymTypes(object):
         if len(tok) >= 2 and tok[1] == "#":
             tok = self.PREFIXES[tok[0]] + tok[2:]
         if "@" in tok:
-            tok = tok[:tok.index("@")]
+            tok = tok[: tok.index("@")]
         return tok
 
     def versioned(self, symbol, filename):
@@ -373,15 +374,23 @@ class SymTypes(object):
             rmvd = len(files_to_remove)
             curr = len(self.file_symvers)
             orig = rmvd + curr
-            print("Reduced files from {} to {}, a {:2.1f}% reduction.".format(
-                orig, curr, 100 * rmvd / orig,
-            ))
+            print(
+                "Reduced files from {} to {}, a {:2.1f}% reduction.".format(
+                    orig,
+                    curr,
+                    100 * rmvd / orig,
+                )
+            )
             rmvd = len(symbols_to_remove)
             curr = len(self.symtok)
             orig = rmvd + curr
-            print("Reduced symbols from {} to {}. A {:2.1f}% reduction.".format(
-                orig, curr, 100 * rmvd / orig,
-            ))
+            print(
+                "Reduced symbols from {} to {}. A {:2.1f}% reduction.".format(
+                    orig,
+                    curr,
+                    100 * rmvd / orig,
+                )
+            )
 
     def write(self, fp):
         """
@@ -401,10 +410,12 @@ class SymTypes(object):
         for filename in sorted(files):
             outline = []
             outline.extend(filename_to_symbols.get(filename, []))
-            outline.extend([
-                "{}@{:08x}".format(s, v)
-                for s, v in self.file_symvers[filename].items()
-            ])
+            outline.extend(
+                [
+                    "{}@{:08x}".format(s, v)
+                    for s, v in self.file_symvers[filename].items()
+                ]
+            )
             outline.sort()
             fp.write("F#{} {}\n".format(filename, " ".join(outline)))
 
@@ -466,9 +477,7 @@ def read_symvers(filename):
 def read_lockedlist(filename):
     """Read a "kabi_lockedlist" file, returning a list of symbols."""
     with open(filename) as f:
-        return set([
-            line.strip() for line in f if not line.startswith("[")
-        ])
+        return set([line.strip() for line in f if not line.startswith("[")])
 
 
 def read_symbols(filename):
@@ -485,13 +494,16 @@ def print_diffs(diffs, st1, st2, desc1="kABI", desc2="Build"):
     """Print the differences returned by identify_kabi_differences()"""
     for orig, v1, v2 in diffs:
         name = st1.name(orig)
-        sys.stdout.writelines(difflib.unified_diff(
-            [line + "\n" for line in st1.gen_short_decl(v1).split("\n")],
-            [line + "\n" for line in st2.gen_short_decl(v2).split("\n")],
-            fromfile="{} - {}".format(name, desc1),
-            tofile="{} - {}".format(name, desc2),
-        ))
+        sys.stdout.writelines(
+            difflib.unified_diff(
+                [line + "\n" for line in st1.gen_short_decl(v1).split("\n")],
+                [line + "\n" for line in st2.gen_short_decl(v2).split("\n")],
+                fromfile="{} - {}".format(name, desc1),
+                tofile="{} - {}".format(name, desc2),
+            )
+        )
         print()
+
 
 # Sub-commands:
 def check(args):
@@ -520,8 +532,12 @@ def check(args):
     if moved:
         print("*** WARNING - ABI SYMBOLS MOVED ***")
         print()
-        print("The following symbols moved (typically caused by moving a symbol from being")
-        print("provided by the kernel vmlinux out to a loadable module). This is not an")
+        print(
+            "The following symbols moved (typically caused by moving a symbol from being"
+        )
+        print(
+            "provided by the kernel vmlinux out to a loadable module). This is not an"
+        )
         print("error, but is being reported for completeness:")
         print()
         print("\n".join(moved))
@@ -529,14 +545,18 @@ def check(args):
     if changed_license:
         print("*** ERROR - SYMBOL LICENSE HAS CHANGED ***")
         print()
-        print("The usage license for the following symbols has changed (this will cause an ABI breakage):")
+        print(
+            "The usage license for the following symbols has changed (this will cause an ABI breakage):"
+        )
         print()
         print("\n".join(changed_license))
         print()
     if changed_abi:
         print("*** ERROR - ABI BREAKAGE WAS DETECTED ***")
         print()
-        print("The following symbols have been changed (this will cause an ABI breakage):")
+        print(
+            "The following symbols have been changed (this will cause an ABI breakage):"
+        )
         print("For help diagnosing why, please see the diffs below the listing.")
         print()
         print("\n".join(changed_abi))
@@ -655,7 +675,9 @@ def compare_helper(symtypes_lhs, symtypes_rhs, print_missing=False, print_symbol
 
 
 def compare(args):
-    return compare_helper(args.symtypes_lhs, args.symtypes_rhs, args.print_missing, args.print_symbols)
+    return compare_helper(
+        args.symtypes_lhs, args.symtypes_rhs, args.print_missing, args.print_symbols
+    )
 
 
 def debug(args):
@@ -733,41 +755,46 @@ def main():
 
     report_p = subp.add_parser(
         "report",
-        help=("Compute and report symbol versions using only data from "
-              "a symtypes file. Mostly for debugging this script."),
+        help=(
+            "Compute and report symbol versions using only data from "
+            "a symtypes file. Mostly for debugging this script."
+        ),
     )
     report_p.set_defaults(func=report)
-    report_p.add_argument(
-        "symtypes", help="symtypes file or collection"
-    )
+    report_p.add_argument("symtypes", help="symtypes file or collection")
 
     check_p = subp.add_parser(
         "check",
-        help=("Compare Module.symvers with Module.kabi. If kABI is broken, "
-              "print a report. If both symtypes files are provided, then "
-              "broken kABI will also trigger a diagnostic that identifies "
-              "the type declarations causing the breakage."),
+        help=(
+            "Compare Module.symvers with Module.kabi. If kABI is broken, "
+            "print a report. If both symtypes files are provided, then "
+            "broken kABI will also trigger a diagnostic that identifies "
+            "the type declarations causing the breakage."
+        ),
     )
     check_p.set_defaults(func=check)
     check_p.add_argument(
-        "--symvers-kabi", "-k",
+        "--symvers-kabi",
+        "-k",
         help="Module.kabi file (the kABI declaration)",
         required=True,
     )
     check_p.add_argument(
-        "--symvers-build", "-s",
+        "--symvers-build",
+        "-s",
         help="Module.symvers file (created from a recent build)",
         required=True,
     )
     check_p.add_argument(
-        "--symtypes-kabi", "-K",
+        "--symtypes-kabi",
+        "-K",
         help="Symtypes.kabi file (symtypes collection from kABI)",
     )
     check_p.add_argument(
-        "--symtypes-build", "-S",
+        "--symtypes-build",
+        "-S",
         help="Symtypes.build file (symtypes collection from build)",
     )
-
 
     collect_p = subp.add_parser(
         "collect",
@@ -775,41 +802,52 @@ def main():
     )
     collect_p.set_defaults(func=collect)
     collect_p.add_argument(
-        "directory", help="directory to search recursively",
+        "directory",
+        help="directory to search recursively",
     )
     collect_p.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         default="Symtypes.build",
         help="File to write the collection to",
     )
     collect_p.add_argument(
         "--minimize-kabi",
-        help=("A Module.kabi or kabi_lockedlist file to use for minimizing "
-              "the size of the Symtypes. Similar in operation to the "
-              "consolidate subcommand."),
+        help=(
+            "A Module.kabi or kabi_lockedlist file to use for minimizing "
+            "the size of the Symtypes. Similar in operation to the "
+            "consolidate subcommand."
+        ),
     )
 
     consolidate_p = subp.add_parser(
         "consolidate",
-        help=("Given a kABI, filter the Symtypes to just data necessary "
-              "to validate kABI symbols. With no kABI, just reads and "
-              "re-writes the Symtypes, which could be good for testing."),
+        help=(
+            "Given a kABI, filter the Symtypes to just data necessary "
+            "to validate kABI symbols. With no kABI, just reads and "
+            "re-writes the Symtypes, which could be good for testing."
+        ),
     )
     consolidate_p.set_defaults(func=consolidate)
     consolidate_p.add_argument(
-        "--input", "-i",
+        "--input",
+        "-i",
         help="Input Symtypes",
         required=True,
     )
     consolidate_p.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         help="Output Symtypes",
         required=True,
     )
     consolidate_p.add_argument(
-        "--kabi", "-k",
-        help=("Module.symvers or kabi_lockedlist containing the list of "
-              "kABI symbols to filter to."),
+        "--kabi",
+        "-k",
+        help=(
+            "Module.symvers or kabi_lockedlist containing the list of "
+            "kABI symbols to filter to."
+        ),
     )
 
     compare_p = subp.add_parser(
@@ -823,15 +861,18 @@ def main():
     )
     compare_p.add_argument(
         "symtypes_rhs",
-        help=("Symtypes file for comparison (e.g. mm/slub.symtypes or "
-              "Symtypes.build)"),
+        help=(
+            "Symtypes file for comparison (e.g. mm/slub.symtypes or " "Symtypes.build)"
+        ),
     )
     compare_p.add_argument(
         "--no-print-symbols",
         action="store_false",
         dest="print_symbols",
-        help=("Do not print the symbols whose symvers differ. Only print the "
-              "underlying type differences."),
+        help=(
+            "Do not print the symbols whose symvers differ. Only print the "
+            "underlying type differences."
+        ),
     )
     compare_p.add_argument(
         "--print-missing",
@@ -841,9 +882,11 @@ def main():
 
     debug_p = subp.add_parser(
         "debug",
-        help=("Given a local build directory, compare against a Symtypes.kabi. "
-              "Roughly equivalent to running collect, consolidate, and then "
-              "compare."),
+        help=(
+            "Given a local build directory, compare against a Symtypes.kabi. "
+            "Roughly equivalent to running collect, consolidate, and then "
+            "compare."
+        ),
     )
     debug_p.set_defaults(func=debug)
     debug_p.add_argument(
@@ -861,15 +904,18 @@ def main():
     )
     smoke_p.set_defaults(func=smoke)
     smoke_p.add_argument(
-        "--symtypes", "-t",
+        "--symtypes",
+        "-t",
         help="Symtypes.kabi file",
     )
     smoke_p.add_argument(
-        "--symvers", "-v",
+        "--symvers",
+        "-v",
         help="Module.kabi file",
     )
     smoke_p.add_argument(
-        "--lockedlist", "-l",
+        "--lockedlist",
+        "-l",
         help="kabi_lockedlist file",
     )
 
@@ -880,5 +926,5 @@ def main():
     args.func(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
