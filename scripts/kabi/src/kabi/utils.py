@@ -2,15 +2,19 @@ import difflib
 import os
 import re
 import sys
+from typing import TYPE_CHECKING, NoReturn
+
+if TYPE_CHECKING:
+    from .symtypes import SymTypes
 
 
-def pretty(s):
+def pretty(s: str) -> str:
     s = s.replace(" ;", ";\n")
     s = s.replace("{", "{\n")
     s = s.replace("}", "\n}")
     s = re.sub(r"([\[\(\*]) ", lambda m: m.group(1), s)
     s = re.sub(r" ([\]\),])", lambda m: m.group(1), s)
-    final_result = []
+    final_result: list[str] = []
     indent = 0
     for line in s.split("\n"):
         line = line.strip()
@@ -24,7 +28,13 @@ def pretty(s):
     return "\n".join(final_result)
 
 
-def print_diffs(diffs, st1, st2, desc1="kABI", desc2="Build"):
+def print_diffs(
+    diffs: set[tuple[str, str, str]],
+    st1: "SymTypes",
+    st2: "SymTypes",
+    desc1: str = "kABI",
+    desc2: str = "Build",
+) -> None:
     for orig, v1, v2 in diffs:
         name = st1.name(orig)
         sys.stdout.writelines(
@@ -38,7 +48,9 @@ def print_diffs(diffs, st1, st2, desc1="kABI", desc2="Build"):
         print()
 
 
-def collect_helper(directory, output, minimize_kabi, verbose=True):
+def collect_helper(
+    directory: str, output: str, minimize_kabi: set[str] | None, verbose: bool = True
+) -> None:
     from .symtypes import SymTypes
 
     st = SymTypes()
@@ -56,7 +68,9 @@ def collect_helper(directory, output, minimize_kabi, verbose=True):
         st.write(fp)
 
 
-def compare_helper(symtypes_lhs, symtypes_rhs, print_missing=False, print_symbols=True):
+def compare_helper(
+    symtypes_lhs: str, symtypes_rhs: str, print_missing: bool = False, print_symbols: bool = True
+) -> NoReturn:
     from .symtypes import SymTypes
 
     st_lhs = SymTypes.from_file(symtypes_lhs)
@@ -76,9 +90,9 @@ def compare_helper(symtypes_lhs, symtypes_rhs, print_missing=False, print_symbol
         if rhs_only:
             print("The following symbols appear only in the Comparison:")
             print("\n".join(rhs_only))
-    diffs = set()
+    diffs: set[tuple[str, str, str]] = set()
     ret = 0
-    diff_syms = []
+    diff_syms: list[str] = []
     for symbol in common_symbols:
         if st_lhs.crc(symbol) != st_rhs.crc(symbol):
             diff_syms.append(symbol)

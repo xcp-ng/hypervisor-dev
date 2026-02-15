@@ -1,22 +1,24 @@
+import argparse
 import os
 import shutil
 import sys
 import tempfile
 import zlib
+from typing import NoReturn
 
 from .fileio import read_lockedlist, read_symbols, read_symvers
 from .symtypes import SymTypes
 from .utils import collect_helper, compare_helper, print_diffs
 
 
-def check(args):
+def check(args: argparse.Namespace) -> NoReturn:
     symvers_kabi = read_symvers(args.symvers_kabi)
     symvers_build = read_symvers(args.symvers_build)
 
-    changed_license = []
-    moved = []
-    changed_abi = []
-    unexported = []
+    changed_license: list[str] = []
+    moved: list[str] = []
+    changed_abi: list[str] = []
+    unexported: list[str] = []
     for sym, (hash_, dir_, type_) in symvers_kabi.items():
         if sym not in symvers_build:
             unexported.append(sym)
@@ -81,7 +83,7 @@ def check(args):
 
     print("*** DETECTED TYPE DIFFERENCES ***")
     print()
-    diffs = set()
+    diffs: set[tuple[str, str, str]] = set()
     for symbol in changed_abi:
         diffs |= SymTypes.identify_kabi_difference(st_kabi, st_build, symbol)
     print_diffs(diffs, st_kabi, st_build)
@@ -89,7 +91,7 @@ def check(args):
     sys.exit(1)
 
 
-def report(args):
+def report(args: argparse.Namespace) -> None:
     t = SymTypes.from_file(args.symtypes)
     for exported, filename in t.exports.items():
         decl = t.gen(exported, filename)
@@ -97,14 +99,14 @@ def report(args):
         print(f"0x{crc:08x}\t{exported}")
 
 
-def collect(args):
-    kabi_syms = None
+def collect(args: argparse.Namespace) -> None:
+    kabi_syms: set[str] | None = None
     if args.minimize_kabi:
         kabi_syms = read_symbols(args.minimize_kabi)
-    return collect_helper(args.directory, args.output, kabi_syms)
+    collect_helper(args.directory, args.output, kabi_syms)
 
 
-def consolidate(args):
+def consolidate(args: argparse.Namespace) -> None:
     st = SymTypes.from_file(args.input)
     if args.kabi:
         symbols = read_symbols(args.kabi)
@@ -113,13 +115,11 @@ def consolidate(args):
         st.write(f)
 
 
-def compare(args):
-    return compare_helper(
-        args.symtypes_lhs, args.symtypes_rhs, args.print_missing, args.print_symbols
-    )
+def compare(args: argparse.Namespace) -> NoReturn:
+    compare_helper(args.symtypes_lhs, args.symtypes_rhs, args.print_missing, args.print_symbols)
 
 
-def debug(args):
+def debug(args: argparse.Namespace) -> NoReturn:
     tmp = tempfile.mkdtemp()
     symtypes_build = os.path.join(tmp, "Symtypes.build")
     try:
@@ -130,7 +130,7 @@ def debug(args):
         shutil.rmtree(tmp)
 
 
-def smoke(args):
+def smoke(args: argparse.Namespace) -> NoReturn:
     kabi_st = SymTypes.from_file(args.symtypes)
     kabi_st_syms = set(kabi_st.exports.keys())
     kabi_sv = read_symvers(args.symvers)
@@ -158,7 +158,7 @@ def smoke(args):
         print("ERROR: Symtypes.kabi contains symbols not in Module.kabi!")
         print("\n".join(sorted(st_only)))
         ret = 1
-    differing_syms = []
+    differing_syms: list[tuple[str, int, int]] = []
     common_syms = kabi_st_syms & kabi_sv_syms
     for sym in common_syms:
         crc = int(kabi_sv[sym][0], 16)
