@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kabi"
-version = "1.0.0"
+version = "0.1.0"
 description = "Tool for checking kABI and providing diagnostics when kABI is broken"
 readme = "README.txt"
 requires-python = ">=3.11"
 license = {text = "GPL-2.0-only"}
 authors = [
-    {name = "Oracle Corporation"},
+    {name = "Stephen Brennan", email="stephen.s.brennan@oracle.com"},
     {name = "Quentin Casasnovas", email="quentin.casasnovas@vates.tech"},
 ]
 keywords = ["kernel", "kabi", "symtypes", "genksyms"]
