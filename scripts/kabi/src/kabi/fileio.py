@@ -1,5 +1,5 @@
-def read_symvers(filename):
-    vers = {}
+def read_symvers(filename: str) -> dict[str, tuple[str, str, str]]:
+    vers: dict[str, tuple[str, str, str]] = {}
     with open(filename) as f:
         for line in f:
             split = line.strip().split()
@@ -10,12 +10,12 @@ def read_symvers(filename):
     return vers
 
 
-def read_lockedlist(filename):
+def read_lockedlist(filename: str) -> set[str]:
     with open(filename) as f:
         return {line.strip() for line in f if not line.startswith("[")}
 
 
-def read_symbols(filename):
+def read_symbols(filename: str) -> set[str]:
     with open(filename) as f:
         first_line = f.readline()
     if first_line.startswith("["):
