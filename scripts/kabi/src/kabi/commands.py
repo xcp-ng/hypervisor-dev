@@ -41,7 +41,8 @@ def check(args):
         print("*** ERROR - SYMBOL LICENSE HAS CHANGED ***")
         print()
         print(
-            "The usage license for the following symbols has changed (this will cause an ABI breakage):"
+            "The usage license for the following symbols has changed"
+            " (this will cause an ABI breakage):"
         )
         print()
         print("\n".join(changed_license))
