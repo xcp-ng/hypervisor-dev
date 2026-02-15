@@ -93,7 +93,7 @@ def report(args):
     for exported, filename in t.exports.items():
         decl = t.gen(exported, filename)
         crc = zlib.crc32(decl.encode()) & 0xFFFFFFFF
-        print("0x{:08x}\t{}".format(crc, exported))
+        print(f"0x{crc:08x}\t{exported}")
 
 
 def collect(args):
@@ -172,7 +172,7 @@ def smoke(args):
         )
         print("Computed\tRecorded\tSymbol")
         for sym, crc, computed_crc in differing_syms:
-            print("{:08x}\t{:08x}\t{}".format(computed_crc, crc, sym))
+            print(f"{computed_crc:08x}\t{crc:08x}\t{sym}")
         ret = 1
 
     if ret:
