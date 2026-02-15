@@ -136,7 +136,7 @@ class SymTypes:
             self.add(line.strip(), filename)
 
     def consolidate_symvers(self):
-        for filename, symvers_map in self.file_symvers.items():
+        for _filename, symvers_map in self.file_symvers.items():
             for symbol in list(symvers_map.keys()):
                 if symbol not in self.dupes:
                     del symvers_map[symbol]
