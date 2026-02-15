@@ -8,7 +8,7 @@ from .utils import pretty
 
 class SymTypes:
     PREFIXES: dict[str, str] = {
-        "t": "",
+        "t": "typedef ",
         "E": "",
         "e": "enum ",
         "s": "struct ",
@@ -65,7 +65,7 @@ class SymTypes:
         result: list[str] = []
         for tok in self.symtok[token]:
             result.append(self.name(tok))
-        return pretty(" ".join(result))
+        return pretty(" ".join(result), enum_mode=token.startswith("e#"))
 
     def crc(self, token: str, fn: str | None = None) -> int:
         if not fn:
