@@ -4,7 +4,7 @@ import zlib
 from .utils import pretty
 
 
-class SymTypes(object):
+class SymTypes:
     PREFIXES = {
         "t": "",
         "E": "",
@@ -37,7 +37,7 @@ class SymTypes(object):
     def versioned(self, symbol, filename):
         if symbol in self.dupes:
             crc = self.file_symvers[filename][symbol]
-            return "{}@{:08x}".format(symbol, crc)
+            return f"{symbol}@{crc:08x}"
         return symbol
 
     def _gen(self, tok, seen, out, filename):
@@ -71,12 +71,12 @@ class SymTypes(object):
         return zlib.crc32(self.gen(token, fn).encode()) & 0xFFFFFFFF
 
     def _add_duplicate(self, symbol, crc):
-        new_name = "{}@{:08x}".format(symbol, crc)
+        new_name = f"{symbol}@{crc:08x}"
         self.dupes[symbol].add(new_name)
         return new_name
 
     def _new_duplicate(self, symbol, crc):
-        new_name = "{}@{:08x}".format(symbol, self.symcrc[symbol])
+        new_name = f"{symbol}@{self.symcrc[symbol]:08x}"
         self.dupes[symbol].add(new_name)
         self.symtok[new_name] = self.symtok[symbol]
         self.symcrc[new_name] = self.symcrc[symbol]
@@ -171,27 +171,15 @@ class SymTypes(object):
             rmvd = len(files_to_remove)
             curr = len(self.file_symvers)
             orig = rmvd + curr
-            print(
-                "Reduced files from {} to {}, a {:2.1f}% reduction.".format(
-                    orig,
-                    curr,
-                    100 * rmvd / orig,
-                )
-            )
+            print(f"Reduced files from {orig} to {curr}, a {100 * rmvd / orig:2.1f}% reduction.")
             rmvd = len(symbols_to_remove)
             curr = len(self.symtok)
             orig = rmvd + curr
-            print(
-                "Reduced symbols from {} to {}. A {:2.1f}% reduction.".format(
-                    orig,
-                    curr,
-                    100 * rmvd / orig,
-                )
-            )
+            print(f"Reduced symbols from {orig} to {curr}. A {100 * rmvd / orig:2.1f}% reduction.")
 
     def write(self, fp):
         for symbol, tokens in sorted(self.symtok.items()):
-            fp.write("{} {}\n".format(symbol, " ".join(tokens)))
+            fp.write(f"{symbol} {' '.join(tokens)}\n")
         files = set(self.exports.values()) | set(self.file_symvers.keys())
         filename_to_symbols = collections.defaultdict(list)
         for sym, fn in self.exports.items():
@@ -199,11 +187,9 @@ class SymTypes(object):
         for filename in sorted(files):
             outline = []
             outline.extend(filename_to_symbols.get(filename, []))
-            outline.extend(
-                ["{}@{:08x}".format(s, v) for s, v in self.file_symvers[filename].items()]
-            )
+            outline.extend([f"{s}@{v:08x}" for s, v in self.file_symvers[filename].items()])
             outline.sort()
-            fp.write("F#{} {}\n".format(filename, " ".join(outline)))
+            fp.write(f"F#{filename} {' '.join(outline)}\n")
 
     def deps(self, symbol):
         deps = set()
