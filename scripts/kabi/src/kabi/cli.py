@@ -4,7 +4,7 @@ import sys
 from . import commands
 
 
-def main():
+def main() -> None:
     p = argparse.ArgumentParser(
         description="kABI checking and diagnostics",
     )
