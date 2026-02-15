@@ -173,6 +173,55 @@ def main() -> None:
         help="kabi_lockedlist file",
     )
 
+    tui_p = subp.add_parser(
+        "tui",
+        help="Opens an interactive user interface to help fixing kABI changes",
+    )
+    tui_p.set_defaults(func=commands.tui)
+    tui_p.add_argument(
+        "--locked-file",
+        "-l",
+        required=True,
+        metavar="KABI.LOCKED_FILE",
+        help="Path to the kabi.locked_file (e.g. xcpng-8.3-kabi.locked_list)",
+    )
+    tui_p.add_argument(
+        "--repository",
+        "-r",
+        default="./",
+        help="Path to the git repository hosting the source code",
+    )
+    tui_p.add_argument(
+        "--rev-list",
+        required=True,
+        help=(
+            "Options passed to git rev-list to get the list of commits to audit "
+            "(e.g. v4.19.19..v4.19.325)"
+        ),
+    )
+    tui_p.add_argument(
+        "--old-vmlinux",
+        metavar="VMLINUX.O",
+        required=False,
+        help="Unstripped vmlinux.o file before changes",
+    )
+    tui_p.add_argument(
+        "--new-vmlinux",
+        metavar="VMLINUX.O",
+        required=False,
+        help="Unstripped vmlinux.o file after changes",
+    )
+    tui_p.add_argument(
+        "symtypes_lhs",
+        metavar="Modules.kabi|Symtypes.build",
+        help="Symtypes file for baseline (e.g. kABI Modules.kabi-v4.19.19)",
+    )
+    tui_p.add_argument(
+        "symtypes_rhs",
+        metavar="Modules.kabi|Symtypes.build",
+        help=("Symtypes file for comparison (e.g. Symtypes.build-v4.19.325)"),
+    )
+
     args = p.parse_args()
     if not getattr(args, "func", None):
         p.print_help()
