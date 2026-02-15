@@ -25,7 +25,11 @@ classifiers = [
     "Environment :: Console",
 ]
 
-dependencies = []
+dependencies = [
+    "textual>=7.5.0",
+    "rich>=14.3.2",
+    "pygments>=2.19.2",
+]
 
 [dependency-groups]
 dev = [

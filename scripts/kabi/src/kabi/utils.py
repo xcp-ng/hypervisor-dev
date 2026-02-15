@@ -8,10 +8,12 @@ if TYPE_CHECKING:
     from .symtypes import SymTypes
 
 
-def pretty(s: str) -> str:
+def pretty(s: str, enum_mode: bool = False) -> str:
     s = s.replace(" ;", ";\n")
     s = s.replace("{", "{\n")
     s = s.replace("}", "\n}")
+    if enum_mode:
+        s = s.replace(", ", ",\n")
     s = re.sub(r"([\[\(\*]) ", lambda m: m.group(1), s)
     s = re.sub(r" ([\]\),])", lambda m: m.group(1), s)
     final_result: list[str] = []

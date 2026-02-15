@@ -8,6 +8,7 @@ from typing import NoReturn
 
 from .fileio import read_lockedlist, read_symbols, read_symvers
 from .symtypes import SymTypes
+from .ui.app import KabiTuiApp
 from .utils import collect_helper, compare_helper, print_diffs
 
 
@@ -182,3 +183,7 @@ def smoke(args: argparse.Namespace) -> NoReturn:
         print("Unless you've modified Module.kabi or Symtypes.kabi, you should")
         print("report these to the UEK maintainers.")
     sys.exit(ret)
+
+
+def tui(args: argparse.Namespace):
+    KabiTuiApp(args).run()
