@@ -31,8 +31,8 @@ def print_diffs(diffs, st1, st2, desc1="kABI", desc2="Build"):
             difflib.unified_diff(
                 [line + "\n" for line in st1.gen_short_decl(v1).split("\n")],
                 [line + "\n" for line in st2.gen_short_decl(v2).split("\n")],
-                fromfile="{} - {}".format(name, desc1),
-                tofile="{} - {}".format(name, desc2),
+                fromfile=f"{name} - {desc1}",
+                tofile=f"{name} - {desc2}",
             )
         )
         print()
