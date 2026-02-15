@@ -42,7 +42,7 @@ def collect_helper(directory, output, minimize_kabi, verbose=True):
     from .symtypes import SymTypes
 
     st = SymTypes()
-    for dirpath, dirnames, filenames in os.walk(directory):
+    for dirpath, _dirnames, filenames in os.walk(directory):
         for fn in filenames:
             if fn.endswith(".symtypes"):
                 file_path = os.path.join(dirpath, fn)
