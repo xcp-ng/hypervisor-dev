@@ -1,9 +1,10 @@
 import argparse
 import asyncio
-
+import difflib
 import pygit2
-
 import re
+
+from collections import defaultdict
 
 from enum import StrEnum
 
@@ -11,13 +12,16 @@ from rich.syntax import Syntax
 from rich.text import Text, Span
 from rich.style import Style
 
-from textual import work
+from textual import work, log
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.content import Content
 from textual.events import DescendantBlur, DescendantFocus
 from textual.reactive import reactive
 from textual.widgets import DataTable, Footer, Header, LoadingIndicator, Static
+
+
+from ..fileio import read_lockedlist_grouped
 from ..symtypes import SymTypes
 
 
@@ -171,6 +175,7 @@ class KabiTuiApp(App):
         self.args = args
         self.repo = pygit2.Repository(args.repository)
         self.struct_version = "old"
+        self.differing_types: set[tuple[str, str, str]] = set()
 
     async def action_toggle_old_new(self) -> None:
         self.struct_version = "old" if self.struct_version == "new" else "new"
@@ -248,16 +253,22 @@ class KabiTuiApp(App):
 
     @work
     async def load_data(self) -> None:
-        differing_types: set[tuple[str, str, str]] = set()
-
+        self.symbol_versions : defaultdict[str, list[tuple[str, str]]] = defaultdict(list)
+        self.rdep_symbol: defaultdict[str, list[str]] = defaultdict(list)
         for symbol in self.common_symbols:
             await asyncio.sleep(0)
             if self.old_symtypes.crc(symbol) == self.new_symtypes.crc(symbol):
                 continue
-            differing_types |= SymTypes.identify_kabi_difference(self.old_symtypes, self.new_symtypes, symbol)
+            for sym, old_version, new_version in SymTypes.identify_kabi_difference(self.old_symtypes, self.new_symtypes, symbol):
+                self.differing_types.add((sym, old_version, new_version))
+                self.symbol_versions[sym].append((old_version, new_version))
+                self.rdep_symbol[sym].append(symbol)
 
-        for symbol, _, _ in sorted(differing_types, key=self.symbol_key):
+        for symbol, _, _ in sorted(self.differing_types, key=self.symbol_key):
             self.symbols.add_row(self.old_symtypes.name(symbol), key=symbol)
+
+        self.module_symbols = read_lockedlist_grouped(self.args.locked_file)
+        log(self.module_symbols)
         self.loaded = True
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected):
@@ -268,9 +279,7 @@ class KabiTuiApp(App):
     async def refresh_all(self) -> None:
         await self.refresh_holes(self.symbol)
         await self.refresh_diff(self.symbol)
-
-    async def refresh_diff(self, symbole: str) -> None:
-        pass
+        await self.refresh_modules(self.symbol)
 
     # /* <3d8c> ./include/linux/mutex.h:53 */
     include_header_re = re.compile(r"/[*] <(?P<symver>[a-f0-9]+)> ([.]/)?(?P<header>[^:]+):(?P<line_number>[0-9]+) [*]/")
@@ -302,6 +311,34 @@ class KabiTuiApp(App):
             )
         )
         return header_title
+
+    async def refresh_diff(self, symbol: str) -> None:
+        diff_body: HighlightedLog = self.symbol_diff.query_one(HighlightedLog)
+
+        old_symbol_definition = self.old_symtypes.gen_short_decl(self.symbol_versions[symbol][0][0])
+        new_symbol_definition = self.new_symtypes.gen_short_decl(self.symbol_versions[symbol][0][1])
+
+        diff_body.clear()
+        for line in difflib.unified_diff(
+                old_symbol_definition.splitlines(),
+                new_symbol_definition.splitlines(),
+                fromfile=self.old_symtypes.name(symbol),
+                tofile=self.new_symtypes.name(symbol),
+                lineterm=""
+        ):
+            diff_body.write_line(line)
+
+    async def refresh_modules(self, symbol: str) -> None:
+        modules_body: HighlightedLog = self.impacted_modules.query_one(HighlightedLog)
+
+        modules_body.clear()
+        modules = set()
+        for orig_symbol in self.rdep_symbol[symbol]:
+            for module in self.module_symbols[orig_symbol]:
+                modules.add(module)
+        for module in sorted(modules):
+            modules_body.write_line(module)
+
 
     async def refresh_holes(self, symbol: str) -> None:
         if len(symbol) < 2 or symbol[1] != "#":
