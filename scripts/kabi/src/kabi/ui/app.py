@@ -7,19 +7,17 @@ import re
 
 from enum import StrEnum
 
-from pygments.formatters import Terminal256Formatter
-
 from rich.syntax import Syntax
 from rich.text import Text, Span
 from rich.style import Style
 
-from textual import work, log
+from textual import work
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.content import Content
-from textual.reactive import var
+from textual.events import DescendantBlur, DescendantFocus
+from textual.reactive import reactive
 from textual.widgets import DataTable, Footer, Header, LoadingIndicator, Static
-
 from ..symtypes import SymTypes
 
 
@@ -42,6 +40,7 @@ class SolarizedColors(StrEnum):
     Cyan = "#2aa198"
     Green = "#859900"
 
+
 def clear_background(t: Text) -> Text:
     spans = []
     t.style = None
@@ -60,23 +59,74 @@ def clear_background(t: Text) -> Text:
     return t
 
 
-class CSymbolTable(DataTable):
-    def on_mount(self):
-        self.cursor_type = "row"
-        self.add_column("Changed symbols")
+class HighlightedLog(VerticalScroll):
+    def __init__(self, lexer: None | str = "c", theme: None | str = "solarized-dark", *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.syntax = Syntax(
             "",
-            lexer="c",
-            theme="solarized-dark",
+            lexer=lexer,
+            theme=theme,
+            background_color="default",
+        )
+        self.content = Text("")
+
+    def compose(self) -> ComposeResult:
+        yield Static()
+
+    def clear(self) -> None:
+        self.content = Text("")
+
+    def write_line(self, line: str, *args, **kwargs):
+        line = clear_background(self.syntax.highlight(line))
+        self.content.append_text(
+            line
+        )
+        self.query_one(Static).content = self.content
+
+
+class TitledVertical(Vertical):
+    def __init__(self, *args, **kwargs):
+        self.title = kwargs.pop("title") if "title" in kwargs else "unknowntitle"
+        super().__init__(*args, **kwargs)
+
+    def compose(self) -> ComposeResult:
+        yield TitledHeader(title=self.title)
+        yield from super().compose()
+
+    def on_descendant_focus(self, event: DescendantFocus) -> None:
+        self.query_one(TitledHeader).toggle_class("-focused")
+
+    def on_descendant_blur(self, event: DescendantBlur) -> None:
+        self.query_one(TitledHeader).toggle_class("-focused")
+
+
+class HighlightedTable(DataTable):
+    def __init__(self, lexer: None | str = "c", theme: None | str = "solarized-dark", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.syntax = Syntax(
+            "",
+            lexer=lexer,
+            theme=theme,
             background_color="default",
         )
 
-    def add_row(self, cell, *args, **kwargs):
-        cell = self.syntax.highlight(cell)
-        super().add_row(clear_background(cell), *args, **kwargs)
+    def on_mount(self) -> None:
+        self.cursor_type = "row"
+        self.add_column("Changed symboles")
+
+    def add_row(self, line, *args, **kwargs):
+        line = self.syntax.highlight(line)
+        super().add_row(clear_background(line), *args, **kwargs)
 
 
 class TitledHeader(Header):
+
+    DEFAULT_CSS = """
+    TitledHeader.-focused {
+        background: $footer-background
+    }
+"""
+
     def __init__(self, title: str | Text, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.title = title
@@ -91,6 +141,7 @@ class TitledHeader(Header):
         if isinstance(self.title, Text):
             return self.title
         return Text(self.title)
+
 
 class KabiTuiApp(App):
 
@@ -119,7 +170,7 @@ class KabiTuiApp(App):
         ("n", "toggle_old_new", "Toggle between old/new structs.")
     ]
 
-    loaded: var[bool] = var(False)
+    loaded: reactive[bool] = reactive(False)
 
     def __init__(self, args: argparse.Namespace):
         super().__init__()
@@ -137,15 +188,15 @@ class KabiTuiApp(App):
 
     def compose(self) -> ComposeResult:
         self.startup_loading_indicator = LoadingIndicator()
-        self.symbols = CSymbolTable()
+        self.symbols = HighlightedTable()
         self.symbol_diff = Vertical(
             TitledHeader(title="Symbol diff"),
-            Static(),
+            DataTable(),
             id="symbol-diff"
         )
-        self.struct_holes = Vertical(
-            TitledHeader(title="Holes"),
-            CSymbolTable()
+        self.struct_holes = TitledVertical(
+            HighlightedLog(),
+            title="Holes",
         )
         self.impacted_modules = Vertical(
             TitledHeader(title="Modules impacted",),
@@ -222,6 +273,10 @@ class KabiTuiApp(App):
 
     async def refresh_all(self) -> None:
         await self.refresh_holes(self.symbol)
+        await self.refresh_diff(self.symbol)
+
+    async def refresh_diff(self, symbole: str) -> None:
+        pass
 
     # /* <3d8c> ./include/linux/mutex.h:53 */
     include_header_re = re.compile(r"/[*] <(?P<symver>[a-f0-9]+)> ([.]/)?(?P<header>[^:]+):(?P<line_number>[0-9]+) [*]/")
@@ -258,8 +313,8 @@ class KabiTuiApp(App):
         if len(symbol) < 2 or symbol[1] != "#":
             return
 
-        holes_table: CSymbolTable = self.struct_holes.query_one("DataTable")
-        holes_header: TitledHeader = self.struct_holes.query_one("TitledHeader")
+        holes_body: HighlightedLog = self.struct_holes.query_one(HighlightedLog)
+        holes_header: TitledHeader = self.struct_holes.query_one(TitledHeader)
         cmd = [
             "pahole",
             "-I",
@@ -272,18 +327,22 @@ class KabiTuiApp(App):
             stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await pahole.communicate()
-        if pahole.returncode != 0:
-            self.notify(f"pahole returned {pahole.returncode}: {stderr=}")
+        if pahole.returncode != 0 or stderr:
+            stderr = stderr.decode().strip()
+            self.notify(
+                stderr,
+                title="pahole error",
+                severity="error"
+            )
             return
-        holes_table.clear(columns=True)
-        holes_table.add_column("")
+        holes_body.clear()
         definition_line = None
         for line_number, line in enumerate(stdout.decode().splitlines()):
             if line_number < 2:
                 if line_number == 1:
                     definition_line = line
                 continue
-            holes_table.add_row(line)
+            holes_body.write_line(line)
         holes_header.set_title(
             self.get_header_title(
                 symbol,
