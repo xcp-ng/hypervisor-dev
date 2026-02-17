@@ -60,6 +60,11 @@ def clear_background(t: Text) -> Text:
 
 
 class HighlightedLog(VerticalScroll):
+    DEFAULT_CSS = """
+    HighlightedLog:focus {
+        background: $background-lighten-1
+}
+"""
     def __init__(self, lexer: None | str = "c", theme: None | str = "solarized-dark", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.syntax = Syntax(
@@ -93,13 +98,6 @@ class TitledVertical(Vertical):
         yield TitledHeader(title=self.title)
         yield from super().compose()
 
-    def on_descendant_focus(self, event: DescendantFocus) -> None:
-        self.query_one(TitledHeader).toggle_class("-focused")
-
-    def on_descendant_blur(self, event: DescendantBlur) -> None:
-        self.query_one(TitledHeader).toggle_class("-focused")
-
-
 class HighlightedTable(DataTable):
     def __init__(self, lexer: None | str = "c", theme: None | str = "solarized-dark", *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -120,13 +118,6 @@ class HighlightedTable(DataTable):
 
 
 class TitledHeader(Header):
-
-    DEFAULT_CSS = """
-    TitledHeader.-focused {
-        background: $footer-background
-    }
-"""
-
     def __init__(self, title: str | Text, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.title = title
@@ -146,6 +137,9 @@ class TitledHeader(Header):
 class KabiTuiApp(App):
 
     DEFAULT_CSS = """
+    *:focus {
+        scrollbar-color: $primary
+    }
     CSymbolTable > {
         height: 100%
     }
@@ -189,24 +183,24 @@ class KabiTuiApp(App):
     def compose(self) -> ComposeResult:
         self.startup_loading_indicator = LoadingIndicator()
         self.symbols = HighlightedTable()
-        self.symbol_diff = Vertical(
-            TitledHeader(title="Symbol diff"),
-            DataTable(),
-            id="symbol-diff"
+        self.symbol_diff = TitledVertical(
+            HighlightedLog(lexer="diff"),
+            id="symbol-diff",
+            title="Symbol diff"
         )
         self.struct_holes = TitledVertical(
             HighlightedLog(),
-            title="Holes",
+            title="Holes"
         )
-        self.impacted_modules = Vertical(
-            TitledHeader(title="Modules impacted",),
-            DataTable(),
-            id="impacted-modules"
+        self.impacted_modules = TitledVertical(
+            HighlightedLog(),
+            id="impacted-modules",
+            title="Modules impacted"
         )
-        self.guilty_commits = Vertical(
-            TitledHeader(title="Infringuing commits"),
-            DataTable(),
-            id="guilty-commits"
+        self.guilty_commits = TitledVertical(
+            HighlightedLog(),
+            id="guilty-commits",
+            title="Infringuing commits"
         )
         self.body = Horizontal(
             self.symbols,
