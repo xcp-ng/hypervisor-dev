@@ -8,6 +8,9 @@ from collections import defaultdict
 
 from enum import StrEnum
 
+from pygments.lexers import CLexer
+from pygments.token import Token
+
 from rich.syntax import Syntax
 from rich.text import Text, Span
 from rich.style import Style
@@ -187,38 +190,38 @@ class KabiTuiApp(App):
 
     def compose(self) -> ComposeResult:
         self.startup_loading_indicator = LoadingIndicator()
-        self.symbols = HighlightedTable()
-        self.symbol_diff = TitledVertical(
+        self.changed_symbols_view = HighlightedTable()
+        self.symbol_diff_view = TitledVertical(
             HighlightedLog(lexer="diff"),
             id="symbol-diff",
             title="Symbol diff"
         )
-        self.struct_holes = TitledVertical(
+        self.struct_holes_view = TitledVertical(
             HighlightedLog(),
             title="Holes"
         )
-        self.impacted_modules = TitledVertical(
+        self.impacted_modules_view = TitledVertical(
             HighlightedLog(),
             id="impacted-modules",
             title="Modules impacted"
         )
-        self.guilty_commits = TitledVertical(
+        self.guilty_commits_view = TitledVertical(
             HighlightedLog(),
             id="guilty-commits",
             title="Infringuing commits"
         )
         self.body = Horizontal(
-            self.symbols,
+            self.changed_symbols_view,
             Vertical(
                 Horizontal(
                     Vertical(
-                        self.symbol_diff,
-                        self.impacted_modules
+                        self.symbol_diff_view,
+                        self.impacted_modules_view
                     ),
-                    self.struct_holes,
+                    self.struct_holes_view,
                     id="main-horizontal"
                 ),
-                self.guilty_commits,
+                self.guilty_commits_view,
                 id="main"
             ),
         )
@@ -232,7 +235,7 @@ class KabiTuiApp(App):
         self.theme = "solarized-dark"
         self.body.display = False
         self.startup_loading_indicator.display = True
-        self.symbols.styles.width = "20%"
+        self.changed_symbols_view.styles.width = "20%"
 
         self.old_symtypes = SymTypes.from_file(self.args.symtypes_lhs)
         self.new_symtypes = SymTypes.from_file(self.args.symtypes_rhs)
@@ -265,30 +268,30 @@ class KabiTuiApp(App):
                 self.rdep_symbol[sym].append(symbol)
 
         for symbol, _, _ in sorted(self.differing_types, key=self.symbol_key):
-            self.symbols.add_row(self.old_symtypes.name(symbol), key=symbol)
+            self.changed_symbols_view.add_row(self.old_symtypes.name(symbol), key=symbol)
 
         self.module_symbols = read_lockedlist_grouped(self.args.locked_file)
         log(self.module_symbols)
         self.loaded = True
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected):
-        if event.data_table == self.symbols:
+        if event.data_table == self.changed_symbols_view:
             self.symbol = event.row_key.value
-            await self.refresh_all()
+            self.refresh_all()
 
+    @work(exclusive=True)
     async def refresh_all(self) -> None:
+        await self.refresh_symbol_data(self.symbol)
         await self.refresh_holes(self.symbol)
-        await self.refresh_diff(self.symbol)
-        await self.refresh_modules(self.symbol)
+        self.refresh_diff_view(self.symbol)
+        self.refresh_modules(self.symbol)
+        self.refresh_commits(self.symbol)
 
     # /* <3d8c> ./include/linux/mutex.h:53 */
     include_header_re = re.compile(r"/[*] <(?P<symver>[a-f0-9]+)> ([.]/)?(?P<header>[^:]+):(?P<line_number>[0-9]+) [*]/")
 
     def get_header_title(self, symbol: str, line: str) -> Text:
         symbol = self.old_symtypes.name(symbol)
-        m = self.include_header_re.match(line)
-        assert m is not None
-
         header_title = Text("[")
         header_title.append_text(
             Text(
@@ -299,37 +302,128 @@ class KabiTuiApp(App):
         header_title.append_text(Text(f"] {symbol} - "))
         header_title.append_text(
             Text(
-                m.group("header"),
+                self.type_header_file,
                 SolarizedColors.Yellow
             )
         )
         header_title.append(":")
         header_title.append_text(
             Text(
-                m.group("line_number"),
+                self.type_line_number,
                 SolarizedColors.Blue
             )
         )
         return header_title
 
-    async def refresh_diff(self, symbol: str) -> None:
-        diff_body: HighlightedLog = self.symbol_diff.query_one(HighlightedLog)
+    async def refresh_symbol_data(self, symbol: str) -> None:
+        def refresh_symbol_diff():
+            self.old_symbol_definition = self.old_symtypes.gen_short_decl(self.symbol_versions[symbol][0][0])
+            self.new_symbol_definition = self.new_symtypes.gen_short_decl(self.symbol_versions[symbol][0][1])
+            self.symbol_diff = [
+                diff for diff in difflib.unified_diff(
+                    old_symbol_definition.splitlines(),
+                    new_symbol_definition.splitlines(),
+                    fromfile=self.old_symtypes.name(symbol),
+                    tofile=self.new_symtypes.name(symbol),
+                    lineterm=""
+                )
+            ]
 
-        old_symbol_definition = self.old_symtypes.gen_short_decl(self.symbol_versions[symbol][0][0])
-        new_symbol_definition = self.new_symtypes.gen_short_decl(self.symbol_versions[symbol][0][1])
+        def refresh_pahole():
+            def check(pahole, outputs):
+                if pahole.returncode != 0 or outputs[1]:
+                    self.notify(
+                        outputs[1].decode().strip(),
+                        title="pahole error",
+                        severity="error"
+                    )
 
+            cmd = [ "pahole", "-IC", symbol[2:] ]
+            pahole_old, pahole_new = await asyncio.gather(
+                asyncio.create_subprocess_exec(
+                    *cmd,
+                    self.args.old_vmlinux,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                ),
+                asyncio.create_subprocess_exec(
+                    *cmd,
+                    self.args.new_vmlinux,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+            )
+            pahole_old_outputs, pahole_new_outputs = await asyncio.gather(
+                pahole_old.communicate(),
+                pahole_new.communicate()
+            )
+            check(pahole_old, pahole_old_outputs)
+            check(pahole_new, pahole_new_outputs)
+            self.pahole_old_output = pahole_old_outputs[0].decode().splitlines()
+            self.pahole_new_output = pahole_new_outputs[0].decode().splitlines()
+            header = self.include_header_re.match(self.pahole_old_output[1])
+            assert header is not None
+            self.type_header_file = header.group("header")
+            self.type_line_number = header.group("line_number")
+
+        def refresh_pickaxe():
+            clexer = CLexer()
+            tokens = []
+            for line in self.symbold_diff:
+                if line.startswith("+++") or line.startswith("---"):
+                    continue
+                if not line.startswith("+") and not line.startswith("-"):
+                    continue
+                tokens = clexer.get_tokens(line)
+                tokens = [token_pair[1] for token_pair in tokens if token_pair[0] == Token.Name]
+            self.pickaxe_tokens = tokens
+
+        def refresh_commits():
+            if not self.pickaxe_tokens:
+                self.commits = []
+            cmd = [
+                "git",
+                "-C", self.args.repository,
+                "log",
+                "--oneline",
+                "-G", "|".join(self.pickaxe_tokens),
+                self.args.rev_list,
+                "--",
+                self.type_header_file
+            ]
+            git_log = await asyncio.create_subprocess_exec(cmd)
+            stdout, stderr = git_log.communicate()
+            if git_log.returncode != 0 or stderr:
+                self.notify(
+                    stderr.decode().strip(),
+                    title="git log error",
+                    severity="error"
+                )
+                self.commits = []
+                return
+            self.commits = stdout.decode.splitlines()
+
+        pahole_worker = self.run_worker(refresh_pahole())
+        refresh_symbol_diff()
+        refresh_pickaxe()
+        await pahole_worker
+        refresh_commits()
+
+    def refresh_diff_view(self, symbol: str) -> None:
+        diff_body: HighlightedLog = self.symbol_diff_view.query_one(HighlightedLog)
         diff_body.clear()
-        for line in difflib.unified_diff(
-                old_symbol_definition.splitlines(),
-                new_symbol_definition.splitlines(),
-                fromfile=self.old_symtypes.name(symbol),
-                tofile=self.new_symtypes.name(symbol),
-                lineterm=""
-        ):
+        for line in self.symbol_diff:
             diff_body.write_line(line)
 
+    async def refresh_commits(self, symbol: str) -> None:
+        if not self.pickaxe_tokens:
+            return
+
+
+        pass
+
     async def refresh_modules(self, symbol: str) -> None:
-        modules_body: HighlightedLog = self.impacted_modules.query_one(HighlightedLog)
+        modules_body: HighlightedLog = self.impacted_modules_view.query_one(HighlightedLog)
 
         modules_body.clear()
         modules = set()
@@ -344,31 +438,11 @@ class KabiTuiApp(App):
         if len(symbol) < 2 or symbol[1] != "#":
             return
 
-        holes_body: HighlightedLog = self.struct_holes.query_one(HighlightedLog)
-        holes_header: TitledHeader = self.struct_holes.query_one(TitledHeader)
-        cmd = [
-            "pahole",
-            "-I",
-            "-C", symbol[2:],
-            self.args.old_vmlinux if self.struct_version == "old" else self.args.new_vmlinux
-        ]
-        pahole = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await pahole.communicate()
-        if pahole.returncode != 0 or stderr:
-            stderr = stderr.decode().strip()
-            self.notify(
-                stderr,
-                title="pahole error",
-                severity="error"
-            )
-            return
+        holes_body: HighlightedLog = self.struct_holes_view.query_one(HighlightedLog)
+        holes_header: TitledHeader = self.struct_holes_view.query_one(TitledHeader)
         holes_body.clear()
         definition_line = None
-        for line_number, line in enumerate(stdout.decode().splitlines()):
+        for line_number, line in enumerate(self.pahole_output.splitlines()):
             if line_number < 2:
                 if line_number == 1:
                     definition_line = line
