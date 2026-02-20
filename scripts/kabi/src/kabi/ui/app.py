@@ -121,6 +121,15 @@ class HighlightedLog(VerticalScroll):
         self.content.append_text(clear_background(self.syntax.highlight(content)))
         self.query_one(Static).content = self.content
 
+    def _update_focusability(self) -> None:
+        self.can_focus = self.max_scroll_y > 0
+
+    def watch_virtual_size(self, virtual_size) -> None:
+        self._update_focusability()
+
+    def on_resize(self) -> None:
+        self._update_focusability()
+
     def scroll_page_down(self, *args, **kwargs) -> None:
         kwargs.setdefault("animate", False)
         super().scroll_page_down(*args, **kwargs)
@@ -278,7 +287,8 @@ class CommitShowScreen(ModalScreen):
 
     def action_toggle_function_context(self) -> None:
         self.function_context = not self.function_context
-        self.scroll_home(animate=False)
+        body: HighlightedLog = self.vertical.query_one(HighlightedLog)
+        body.scroll_home(animate=False)
         self.loaded = False
         self.load_commit_show()
 
