@@ -10,6 +10,7 @@ from enum import StrEnum
 
 from pygments.lexer import RegexLexer, bygroups
 from pygments.lexers import CLexer
+from pygments.styles import get_style_by_name
 from pygments.token import Token, Text as TokenText, Number
 
 from rich.syntax import Syntax
@@ -48,6 +49,13 @@ class SolarizedColors(StrEnum):
     Green = "#859900"
 
 
+class GitStyle(get_style_by_name("solarized-dark")):
+    styles = {
+        Number.Hex: SolarizedColors.Yellow,
+        TokenText: SolarizedColors.Base0
+    }
+
+
 class GitLogOnelineLexer(RegexLexer):
     name = "GitLogOneline"
     aliases = ["git-log-oneline"]
@@ -55,7 +63,7 @@ class GitLogOnelineLexer(RegexLexer):
 
     tokens = {
         "root": [
-            (r"([0-9a-f]+)( .+\n?)", bygroups(Token.Literal.Color.Yellow, TokenText)),
+            (r"([0-9a-f]+)( .+\n?)", bygroups(Number.Hex, TokenText)),
         ]
     }
 
@@ -118,36 +126,97 @@ class TitledVertical(Vertical):
         super().__init__(*args, **kwargs)
 
     def compose(self) -> ComposeResult:
-        yield TitledHeader(title=self.title)
+        yield TitledHeader(title=self.title, classes="titled-header")
         yield from super().compose()
+
+    def on_descendant_focus(self, event) -> None:
+        """Update header when a descendant gets focus"""
+        self._update_header_focus()
+
+    def on_descendant_blur(self, event) -> None:
+        """Update header when a descendant loses focus"""
+        self._update_header_focus()
+
+    def _update_header_focus(self) -> None:
+        """Check if any descendant has focus and update header accordingly"""
+        try:
+            header = self.query_one(TitledHeader)
+            # Check if any child (other than the header) has focus
+            focused = self.screen.focused
+            if focused is not None and focused is not header:
+                # Walk up from focused widget to see if it's under this container
+                node = focused
+                while node is not None:
+                    if node is self:
+                        header.has_descendant_focus = True
+                        return
+                    node = node._parent
+            header.has_descendant_focus = False
+        except:
+            pass
 
 
 class HighlightedTable(DataTable):
+    DEFAULT_CSS = """
+    HighlightedTable {
+        &:focus {
+            & > .datatable--cursor {
+                background: $block-hover-background;
+            }
+        }
+    }
+"""
+
     def __init__(
         self,
         lexer: None | str = "c",
         theme: None | str = "solarized-dark",
+        column_titles: None | list[str] = [],
         *args,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, cursor_foreground_priority="renderable", **kwargs)
         self.syntax = Syntax(
             "",
             lexer=lexer,
             theme=theme,
             background_color="default",
         )
+        self.column_titles = column_titles
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
-        self.add_column("Changed symboles")
+        for title in self.column_titles:
+            self.add_column(title)
 
     def add_row(self, line, *args, **kwargs):
         line = self.syntax.highlight(line)
         super().add_row(clear_background(line), *args, **kwargs)
 
 
+class HighlightedCommitsTable(HighlightedTable):
+    BINDINGS = [
+        ("enter", "git_show", "Show commit")
+    ]
+
+    def add_row(self, line, *args, **kwargs):
+        commit_sha1 = line.split(' ')[0]
+        super().add_row(line, *args, key=commit_sha1, **kwargs)
+
+    def action_git_show(self):
+        self.app.notify("action git show")
+        self.action_select_cursor()
+
+
 class TitledHeader(Header):
+    has_descendant_focus: reactive[bool] = reactive(False)
+
+    DEFAULT_CSS = f"""
+    TitledHeader.has-focus-within {{
+        background: $block-cursor-blurred-background;
+    }}
+    """
+
     def __init__(self, title: str | Text, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.title = title
@@ -160,6 +229,9 @@ class TitledHeader(Header):
         if isinstance(self.title, Text):
             return self.title
         return Text(self.title)
+
+    def watch_has_descendant_focus(self, value: bool) -> None:
+        self.set_class(value, "has-focus-within")
 
 
 class KabiTuiApp(App):
@@ -203,13 +275,15 @@ class KabiTuiApp(App):
         self.struct_version = "old" if self.struct_version == "new" else "new"
         self.refresh_holes_view(self.symbol)
 
-    def start(self) -> None:
-        print("App started")
-        print(self.args)
-
     def compose(self) -> ComposeResult:
         self.startup_loading_indicator = LoadingIndicator()
-        self.changed_symbols_view = HighlightedTable()
+        self.changed_symbols_view = TitledVertical(
+            HighlightedTable(
+                column_titles=[""],
+                show_header=False
+            ),
+            title="Changed symbols"
+        )
         self.symbol_diff_view = TitledVertical(
             HighlightedLog(lexer="diff"), id="symbol-diff", title="Symbol diff"
         )
@@ -218,7 +292,12 @@ class KabiTuiApp(App):
             HighlightedLog(), id="impacted-modules", title="Modules impacted"
         )
         self.guilty_commits_view = TitledVertical(
-            HighlightedLog(lexer=GitLogOnelineLexer()),
+            HighlightedCommitsTable(
+                lexer=GitLogOnelineLexer(),
+                theme=GitStyle,
+                column_titles=[""],
+                show_header=False
+            ),
             id="guilty-commits",
             title="Infringuing commits",
         )
@@ -282,8 +361,9 @@ class KabiTuiApp(App):
                 self.symbol_versions[sym].append((old_version, new_version))
                 self.rdep_symbol[sym].append(symbol)
 
+        changed_symbols_body = self.changed_symbols_view.query_one(HighlightedTable)
         for symbol, _, _ in sorted(self.differing_types, key=self.symbol_key):
-            self.changed_symbols_view.add_row(
+            changed_symbols_body.add_row(
                 self.old_symtypes.name(symbol), key=symbol
             )
 
@@ -292,11 +372,16 @@ class KabiTuiApp(App):
         self.loaded = True
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected):
-        if event.data_table == self.changed_symbols_view:
+        changed_symbols_body = self.changed_symbols_view.query_one(HighlightedTable)
+        if event.data_table == changed_symbols_body:
             if self.symbol == event.row_key.value:
                 return
             self.symbol = event.row_key.value
             self.refresh_all()
+            return
+        commits_table = self.guilty_commits_view.query_one(HighlightedCommitsTable)
+        if event.data_table == commits_table:
+            self.notify("this time received the event")
 
     @work(exclusive=True)
     async def refresh_all(self) -> None:
@@ -447,10 +532,11 @@ class KabiTuiApp(App):
         diff_body.reset_content("\n".join(self.symbol_diff))
 
     def refresh_commits_view(self, symbol: str) -> None:
-        commits_body: HighlightedLog = self.guilty_commits_view.query_one(
-            HighlightedLog
+        commits_body: HighlightedTable = self.guilty_commits_view.query_one(
+            HighlightedTable
         )
-        commits_body.reset_content("\n".join(self.commits))
+        for line in self.commits:
+            commits_body.add_row(line)
 
     def refresh_modules_view(self, symbol: str) -> None:
         modules_body: HighlightedLog = self.impacted_modules_view.query_one(
