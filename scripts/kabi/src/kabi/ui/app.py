@@ -19,9 +19,11 @@ from rich.style import Style
 
 from textual import work, log
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.content import Content
 from textual.reactive import reactive
+from textual.screen import ModalScreen
 from textual.widgets import DataTable, Footer, Header, LoadingIndicator, Static
 
 
@@ -119,6 +121,14 @@ class HighlightedLog(VerticalScroll):
         self.content.append_text(clear_background(self.syntax.highlight(content)))
         self.query_one(Static).content = self.content
 
+    def scroll_page_down(self, *args, **kwargs) -> None:
+        kwargs.setdefault("animate", False)
+        super().scroll_page_down(*args, **kwargs)
+
+    def scroll_page_up(self, *args, **kwargs) -> None:
+        kwargs.setdefault("animate", False)
+        super().scroll_page_up(*args, **kwargs)
+
 
 class TitledVertical(Vertical):
     def __init__(self, *args, **kwargs):
@@ -139,21 +149,18 @@ class TitledVertical(Vertical):
 
     def _update_header_focus(self) -> None:
         """Check if any descendant has focus and update header accordingly"""
-        try:
-            header = self.query_one(TitledHeader)
-            # Check if any child (other than the header) has focus
-            focused = self.screen.focused
-            if focused is not None and focused is not header:
-                # Walk up from focused widget to see if it's under this container
-                node = focused
-                while node is not None:
-                    if node is self:
-                        header.has_descendant_focus = True
-                        return
-                    node = node._parent
-            header.has_descendant_focus = False
-        except:
-            pass
+        header = self.query_one(TitledHeader)
+        # Check if any child (other than the header) has focus
+        focused = self.screen.focused
+        if focused is not None and focused is not header:
+            # Walk up from focused widget to see if it's under this container
+            node = focused
+            while node is not None:
+                if node is self:
+                    header.has_descendant_focus = True
+                    return
+                node = node._parent
+        header.has_descendant_focus = False
 
 
 class HighlightedTable(DataTable):
@@ -204,17 +211,16 @@ class HighlightedCommitsTable(HighlightedTable):
         super().add_row(line, *args, key=commit_sha1, **kwargs)
 
     def action_git_show(self):
-        self.app.notify("action git show")
         self.action_select_cursor()
 
 
 class TitledHeader(Header):
     has_descendant_focus: reactive[bool] = reactive(False)
 
-    DEFAULT_CSS = f"""
-    TitledHeader.has-focus-within {{
+    DEFAULT_CSS = """
+    TitledHeader.has-focus-within {
         background: $block-cursor-blurred-background;
-    }}
+    }
     """
 
     def __init__(self, title: str | Text, *args, **kwargs):
@@ -234,33 +240,157 @@ class TitledHeader(Header):
         self.set_class(value, "has-focus-within")
 
 
+class CommitShowScreen(ModalScreen):
+    CSS = """
+    CommitShowScreen {
+        align: center middle;
+    }
+
+    #dialog {
+        background: $panel;
+        border: round $primary;
+        width: 90%;
+        height: 90%;
+        padding: 1 2;
+    }
+    """
+
+    BINDINGS = [
+        Binding("q", "close", "Close"),
+        Binding("W", "toggle_function_context", "Toggle function context"),
+        Binding("]", "increase_context", "Increase context"),
+        Binding("[", "decrease_context", "Decrease context"),
+        Binding("escape", "close", "Close", show=False),
+    ]
+
+    loaded: reactive[bool] = reactive(False)
+
+    def __init__(self, repository: str, commit_sha1: str, title: Text, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.commit_sha1 = commit_sha1
+        self.repository = repository
+        self.context = 3
+        self.function_context: bool = False
+        self.header_title = title
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+    def action_toggle_function_context(self) -> None:
+        self.function_context = not self.function_context
+        self.scroll_home(animate=False)
+        self.loaded = False
+        self.load_commit_show()
+
+    def action_increase_context(self) -> None:
+        self.context += 1
+        self.loaded = False
+        self.load_commit_show()
+
+    def action_decrease_context(self) -> None:
+        orig_context = self.context
+        self.context = max(0, self.context - 1)
+        if orig_context != self.context:
+            self.loaded = False
+            self.load_commit_show()
+
+    @work
+    async def load_commit_show(self) -> None:
+        cmd = [
+            "git",
+            "-C", self.repository,
+            "show",
+            f"-U{self.context}"
+        ]
+        if self.function_context:
+            cmd.append("-W")
+        cmd.append(self.commit_sha1)
+        git_show = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await git_show.communicate()
+        if git_show.returncode != 0 or stderr:
+            self.app.notify(
+                stderr.decode(),
+                title="git show error",
+                severity="error"
+            )
+            return
+        self.content = stdout.decode()
+        body: HighlightedLog = self.vertical.query_one(HighlightedLog)
+        body.reset_content(self.content)
+        self.loaded = True
+
+    def watch_loaded(self, loaded: bool) -> None:
+        body: HighlightedLog = self.vertical.query_one(HighlightedLog)
+        if loaded:
+            self.loading_indicator.display = False
+            #body.scroll_home(animate=False)
+            body.display = True
+            body.focus()
+        else:
+            self.loading_indicator.display = True
+            body.display = False
+
+    def compose(self) -> ComposeResult:
+        self.loading_indicator = LoadingIndicator()
+        yield self.loading_indicator
+        self.vertical = TitledVertical(
+            HighlightedLog(
+                lexer="diff",
+            ),
+            title=self.header_title,
+            id="dialog",
+        )
+        yield self.vertical
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.loading_indicator.display = True
+        body = self.vertical.query_one(HighlightedLog)
+        body.display = False
+        self.load_commit_show()
+
+
 class KabiTuiApp(App):
 
     DEFAULT_CSS = """
     *:focus {
-        scrollbar-color: $primary
+        scrollbar-color: $primary;
     }
     CSymbolTable > {
-        height: 100%
+        height: 100%;
     }
     #main {
-        width: 1fr
+        width: 1fr;
     }
     #main-horizontal {
-        height: 5fr
+        height: 5fr;
     }
     #guilty-commits  {
-        height: 1fr
+        height: 1fr;
+    }
+    #holes {
+        width: 5fr;
     }
     #impacted-modules {
-        height: 1fr
+        height: 1fr;
+    }
+    #diff-side {
+        width: 4fr;
     }
     #symbol-diff {
-        height: 4fr
+        height: 4fr;
     }
     """
 
-    BINDINGS = [("n", "toggle_old_new", "Toggle between old/new structs.")]
+    BINDINGS = [
+        ("n", "toggle_old_new", "Toggle between old/new structs"),
+        ("q", "action_quit", "Quit"),
+        ("v", "toggle_verbose", "Toggle verbose pahole output"),
+    ]
 
     loaded: reactive[bool] = reactive(False)
 
@@ -269,10 +399,17 @@ class KabiTuiApp(App):
         self.args = args
         self.repo = pygit2.Repository(args.repository)
         self.struct_version = "old"
+        self.verbose_pahole = True
         self.differing_types: set[tuple[str, str, str]] = set()
+        self.pahole_worker = None
 
-    async def action_toggle_old_new(self) -> None:
+    def action_toggle_old_new(self) -> None:
         self.struct_version = "old" if self.struct_version == "new" else "new"
+        self.refresh_holes_view(self.symbol)
+
+    def action_toggle_verbose(self) -> None:
+        self.verbose_pahole = not self.verbose_pahole
+        self.pahole_worker = self.refresh_pahole_data(self.symbol)
         self.refresh_holes_view(self.symbol)
 
     def compose(self) -> ComposeResult:
@@ -287,7 +424,10 @@ class KabiTuiApp(App):
         self.symbol_diff_view = TitledVertical(
             HighlightedLog(lexer="diff"), id="symbol-diff", title="Symbol diff"
         )
-        self.struct_holes_view = TitledVertical(HighlightedLog(), title="Holes")
+        self.struct_holes_view = TitledVertical(HighlightedLog(), title="Holes", id="holes")
+        self.impacted_symbols_view = TitledVertical(
+            HighlightedLog(), id="impacted-symbols", title="Symbols impacted"
+        )
         self.impacted_modules_view = TitledVertical(
             HighlightedLog(), id="impacted-modules", title="Modules impacted"
         )
@@ -305,10 +445,14 @@ class KabiTuiApp(App):
             self.changed_symbols_view,
             Vertical(
                 Horizontal(
-                    Vertical(self.symbol_diff_view, self.impacted_modules_view),
+                    Vertical(
+                        self.symbol_diff_view,
+                        self.impacted_modules_view,
+                        id="diff-side"),
                     self.struct_holes_view,
                     id="main-horizontal",
                 ),
+                self.impacted_symbols_view,
                 self.guilty_commits_view,
                 id="main",
             ),
@@ -351,9 +495,14 @@ class KabiTuiApp(App):
         )
         self.rdep_symbol: defaultdict[str, list[str]] = defaultdict(list)
         for symbol in self.common_symbols:
-            await asyncio.sleep(0)
             if self.old_symtypes.crc(symbol) == self.new_symtypes.crc(symbol):
                 continue
+            self.symbol_versions[symbol].append(
+                (
+                    self.old_symtypes.versioned(symbol, self.old_symtypes.exports[symbol]),
+                    self.new_symtypes.versioned(symbol, self.new_symtypes.exports[symbol]),
+                )
+            )
             for sym, old_version, new_version in SymTypes.identify_kabi_difference(
                 self.old_symtypes, self.new_symtypes, symbol
             ):
@@ -372,16 +521,19 @@ class KabiTuiApp(App):
         self.loaded = True
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected):
-        changed_symbols_body = self.changed_symbols_view.query_one(HighlightedTable)
+        changed_symbols_body: HighlightedTable = self.changed_symbols_view.query_one(HighlightedTable)
         if event.data_table == changed_symbols_body:
             if self.symbol == event.row_key.value:
                 return
             self.symbol = event.row_key.value
             self.refresh_all()
             return
-        commits_table = self.guilty_commits_view.query_one(HighlightedCommitsTable)
+        commits_table: HighlightedCommitsTable = self.guilty_commits_view.query_one(HighlightedCommitsTable)
         if event.data_table == commits_table:
-            self.notify("this time received the event")
+            self.display_commit(event.row_key.value, commits_table.get_row(event.row_key)[0])
+
+    def display_commit(self, commit_sha1: str, commit_oneline: Text):
+        self.push_screen(CommitShowScreen(self.args.repository, commit_sha1, commit_oneline))
 
     @work(exclusive=True)
     async def refresh_all(self) -> None:
@@ -390,11 +542,54 @@ class KabiTuiApp(App):
         self.refresh_diff_view(self.symbol)
         self.refresh_modules_view(self.symbol)
         self.refresh_commits_view(self.symbol)
+        self.refresh_symbols_view(self.symbol)
 
     # /* <3d8c> ./include/linux/mutex.h:53 */
     include_header_re = re.compile(
         r"/[*] <(?P<symver>[a-f0-9]+)> ([.]/)?(?P<header>[^:]+):(?P<line_number>[0-9]+) [*]/"
     )
+
+    @work(exclusive=True)
+    async def refresh_pahole_data(self, symbol):
+        def check(pahole, outputs):
+            if pahole.returncode != 0 or outputs[1]:
+                self.notify(
+                    outputs[1].decode().strip(),
+                    title="pahole error",
+                    severity="error",
+                )
+
+        cmd = ["pahole", "-I"]
+        if not self.verbose_pahole:
+            cmd.append("--quiet")
+        cmd.extend([
+            "-C", symbol[2:]
+        ])
+        pahole_old, pahole_new = await asyncio.gather(
+            asyncio.create_subprocess_exec(
+                *cmd,
+                self.args.old_vmlinux,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            ),
+            asyncio.create_subprocess_exec(
+                *cmd,
+                self.args.new_vmlinux,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            ),
+        )
+        pahole_old_outputs, pahole_new_outputs = await asyncio.gather(
+            pahole_old.communicate(), pahole_new.communicate()
+        )
+        check(pahole_old, pahole_old_outputs)
+        check(pahole_new, pahole_new_outputs)
+        self.pahole_old_output = pahole_old_outputs[0].decode().splitlines()
+        self.pahole_new_output = pahole_new_outputs[0].decode().splitlines()
+        header = self.include_header_re.match(self.pahole_old_output[1])
+        assert header is not None
+        self.type_header_file = header.group("header")
+        self.type_line_number = header.group("line_number")
 
     def get_header_title(self, symbol: str) -> Text:
         symbol = self.old_symtypes.name(symbol)
@@ -433,42 +628,6 @@ class KabiTuiApp(App):
                     lineterm="",
                 )
             ]
-
-        async def refresh_pahole():
-            def check(pahole, outputs):
-                if pahole.returncode != 0 or outputs[1]:
-                    self.notify(
-                        outputs[1].decode().strip(),
-                        title="pahole error",
-                        severity="error",
-                    )
-
-            cmd = ["pahole", "-IC", symbol[2:]]
-            pahole_old, pahole_new = await asyncio.gather(
-                asyncio.create_subprocess_exec(
-                    *cmd,
-                    self.args.old_vmlinux,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                ),
-                asyncio.create_subprocess_exec(
-                    *cmd,
-                    self.args.new_vmlinux,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                ),
-            )
-            pahole_old_outputs, pahole_new_outputs = await asyncio.gather(
-                pahole_old.communicate(), pahole_new.communicate()
-            )
-            check(pahole_old, pahole_old_outputs)
-            check(pahole_new, pahole_new_outputs)
-            self.pahole_old_output = pahole_old_outputs[0].decode().splitlines()
-            self.pahole_new_output = pahole_new_outputs[0].decode().splitlines()
-            header = self.include_header_re.match(self.pahole_old_output[1])
-            assert header is not None
-            self.type_header_file = header.group("header")
-            self.type_line_number = header.group("line_number")
 
         def refresh_pickaxe():
             clexer = CLexer()
@@ -520,7 +679,7 @@ class KabiTuiApp(App):
                     modules.add(module)
             self.modules = modules
 
-        pahole_worker = self.run_worker(refresh_pahole())
+        pahole_worker = self.refresh_pahole_data(symbol)
         refresh_symbol_diff()
         refresh_pickaxe()
         refresh_modules()
@@ -535,8 +694,22 @@ class KabiTuiApp(App):
         commits_body: HighlightedTable = self.guilty_commits_view.query_one(
             HighlightedTable
         )
+        commits_body.clear()
         for line in self.commits:
-            commits_body.add_row(line)
+            commits_body.add_row(line.strip())
+
+    def refresh_symbols_view(self, symbol: str) -> None:
+        symbols_body: HighlightedLog = self.impacted_symbols_view.query_one(
+            HighlightedLog
+        )
+        symbols = set()
+        for rdep_symbol in self.rdep_symbol[self.symbol]:
+            symbols.add(
+                self.old_symtypes.gen_short_decl(
+                    self.symbol_versions[rdep_symbol][0][0]
+                )
+            )
+        symbols_body.reset_content("\n".join(sorted(symbols)))
 
     def refresh_modules_view(self, symbol: str) -> None:
         modules_body: HighlightedLog = self.impacted_modules_view.query_one(
@@ -545,9 +718,14 @@ class KabiTuiApp(App):
 
         modules_body.reset_content("\n".join(sorted(self.modules)))
 
-    def refresh_holes_view(self, symbol: str) -> None:
+    @work
+    async def refresh_holes_view(self, symbol: str) -> None:
         if len(symbol) < 2 or symbol[1] != "#":
             return
+
+        if self.pahole_worker is not None:
+            await self.pahole_worker.wait()
+            self.pahole_worker = None
 
         pahole_output = (
             self.pahole_new_output
