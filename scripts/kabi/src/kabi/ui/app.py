@@ -17,6 +17,8 @@ from rich.syntax import Syntax
 from rich.text import Text, Span
 from rich.style import Style
 
+from subprocess import CalledProcessError
+
 from textual import work, log
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -25,7 +27,7 @@ from textual.content import Content
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Footer, Header, LoadingIndicator, Static
-
+from textual.worker import WorkerFailed
 
 from ..fileio import read_lockedlist_grouped
 from ..symtypes import SymTypes
@@ -364,6 +366,10 @@ class CommitShowScreen(ModalScreen):
         self.load_commit_show()
 
 
+class WorkerCalledProcessError(CalledProcessError):
+    pass
+
+
 class KabiTuiApp(App):
 
     DEFAULT_CSS = """
@@ -559,14 +565,20 @@ class KabiTuiApp(App):
         r"/[*] <(?P<symver>[a-f0-9]+)> ([.]/)?(?P<header>[^:]+):(?P<line_number>[0-9]+) [*]/"
     )
 
-    @work(exclusive=True)
+    @work(exclusive=True, thread=True, exit_on_error=False)
     async def refresh_pahole_data(self, symbol):
-        def check(pahole, outputs):
+        def check(pahole, outputs, vmlinux):
             if pahole.returncode != 0 or outputs[1]:
                 self.notify(
                     outputs[1].decode().strip(),
                     title="pahole error",
                     severity="error",
+                )
+                raise WorkerCalledProcessError(
+                    pahole.returncode,
+                    cmd + [vmlinux],
+                    output=outputs[0],
+                    stderr=outputs[1]
                 )
 
         cmd = ["pahole", "-I"]
@@ -592,8 +604,8 @@ class KabiTuiApp(App):
         pahole_old_outputs, pahole_new_outputs = await asyncio.gather(
             pahole_old.communicate(), pahole_new.communicate()
         )
-        check(pahole_old, pahole_old_outputs)
-        check(pahole_new, pahole_new_outputs)
+        check(pahole_old, pahole_old_outputs, self.args.old_vmlinux)
+        check(pahole_new, pahole_new_outputs, self.args.new_vmlinux)
         self.pahole_old_output = pahole_old_outputs[0].decode().splitlines()
         self.pahole_new_output = pahole_new_outputs[0].decode().splitlines()
         header = self.include_header_re.match(self.pahole_old_output[1])
@@ -647,12 +659,13 @@ class KabiTuiApp(App):
                     continue
                 if not line.startswith("+") and not line.startswith("-"):
                     continue
-                tokens = clexer.get_tokens(line)
-                tokens = [
-                    token_pair[1]
-                    for token_pair in tokens
-                    if token_pair[0] == Token.Name
-                ]
+                tokens.extend(
+                    [
+                        token_pair[1]
+                        for token_pair in clexer.get_tokens(line)
+                        if token_pair[0] == Token.Name
+                    ]
+                )
             self.pickaxe_tokens = tokens
 
         async def refresh_commits():
@@ -664,12 +677,15 @@ class KabiTuiApp(App):
                 self.args.repository,
                 "log",
                 "--oneline",
+                "--no-decorate",
                 "-G",
-                "|".join(self.pickaxe_tokens),
+                "(" + "|".join(self.pickaxe_tokens) + ")",
                 self.args.rev_list,
                 "--",
                 self.type_header_file,
             ]
+            from textual import log
+            log(f"{cmd=}")
             git_log = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
@@ -693,8 +709,19 @@ class KabiTuiApp(App):
         refresh_symbol_diff()
         refresh_pickaxe()
         refresh_modules()
-        await pahole_worker.wait()
-        await refresh_commits()
+        try:
+            await pahole_worker.wait()
+        except WorkerFailed as worker_error:
+            self.pahole_new_output = []
+            self.pahole_old_output = []
+            self.type_header_file = "unknown"
+            self.type_line_number = "0"
+            if isinstance(worker_error.error, WorkerCalledProcessError):
+                self.pahole_new_output = worker_error.error.stderr.splitlines()
+                self.pahole_old_output = worker_error.error.stderr.splitlines()
+            self.commits = []
+        else:
+            await refresh_commits()
 
     def refresh_diff_view(self, symbol: str) -> None:
         diff_body: HighlightedLog = self.symbol_diff_view.query_one(HighlightedLog)
@@ -734,8 +761,12 @@ class KabiTuiApp(App):
             return
 
         if self.pahole_worker is not None:
-            await self.pahole_worker.wait()
-            self.pahole_worker = None
+            try:
+                await self.pahole_worker.wait()
+            except WorkerFailed:
+                return
+            finally:
+                self.pahole_worker = None
 
         pahole_output = (
             self.pahole_new_output
