@@ -53,7 +53,7 @@ Genksyms and kernel ABI.
 
 This high-level diagram shows the different files involved in the process:
 
-![kABI files](kabi_diagram.png "kABI files")
+![kABI files](imgs/kabi_diagram.png "kABI files")
 
 > [!NOTE]
 >
@@ -134,9 +134,8 @@ We'll need two different tools present in a separate repository,
 available:
 
 ```bash
-git clone git@github.com:xcp-ng/xcp.git
-cd xcp
-cd scripts/git-review-rebase
+git clone git@github.com:xcp-ng/git-review-rebase.git
+cd git-review-rebase
 pip install -e ./
 ```
 
@@ -416,19 +415,19 @@ docker cp <container_id>:/home/builder/rpmbuild/BUILD/linux-4.19.325/.config /pa
 
 ```
 
-Audit the changes to the config file, and create a separate commit for it.
-This will need to be carefully reviewed as to make sure we're not adding or
-removing any important kernel config.  You can then try again to build the
-RPM.
+Audit the changes to the `.config` file, and create a separate commit for
+it.  This will need to be carefully reviewed as to make sure we're not
+adding or removing any important kernel config.  You can then try again to
+build the RPM.
 
 
 ###### kABI breaking changes
 
 Once the kernel is built, the `check-kabi` script will compare the
-Modules.symvers file with the Module.abi file included in the source and
-will fail if any symbols were changed.  You can ignore this problem for now
-and consider the build as succeeding as the check-kabi happens really late
-in the process.  You can follow the rest of the chapter, and handle kABI
+`Modules.symvers` file with the `Module.kabi` file included in the source
+and will fail if any symbols were changed.  You can ignore this problem for
+now and consider the build as succeeding as the `check-kabi` runs late in
+the process.  You can follow the rest of the chapter, and handle kABI
 breakage later in [Look for kABI breakage](#look-for-kabi-breakage).
 
 ### Verify source RPM generate the same sources
@@ -448,7 +447,10 @@ zero diffs.
 
 ## Review your rebase
 
-[TODO] point to `git-review-rebase` and develop those topics:
+You should have installed `git-review-rebase` from the pre-requisites
+steps, now is time to use it.
+
+Go check its [README](https://github.com/xcp-ng/git-review-rebase) for more information.
 
 ### Dropped commits on the rebase have a reason
 
@@ -458,11 +460,11 @@ commits that were present in the initial rebased range and that were
 dropped during the rebase because an equivalent commit was present as
 ancestor of the new onto point, as those should not show as dropped in the
 `git-review-rebase` TUI, instead they'll show as matched to their
-equivalent commit.
+equivalent upstream commit.
 
 Dropped commits need to have a comment added to them through the
-`git-review-rebase` command (which is using `git notes` internally to
-save/show them) explaining why a commit disappeared from the rebase, e.g.:
+`git-review-rebase` TUI (which is using `git notes` internally to save/show
+them) explaining why a commit disappeared from the rebase, e.g.:
 
 ```text
 commit ab8c1257dd2213bbf9b0ef603bc50398d6bd0e80
@@ -481,7 +483,7 @@ appears as "dropped", and the reason is documented.
 
 ### Patch-ids changes have a reason documented
 
-Most patch-ids changes imply there was a conflict during the rebase, as
+Most patch-id changes imply there was a conflict during the rebase - as
 such, a clear explanation as to what was the conflict as well _why_ there
 was a conflict (i.e. pointing to the commit in the new onto that lead to
 the conflict) MUST be present in the commit description to facilitate
@@ -490,23 +492,28 @@ reviews and document the problems.
 The reviewer will be able to "replay" the rebase of the particular commit
 using `git-rebase-review` to compare their resolution with yours.
 
+Don't hesitate to use the blame output in the `git-review-rebase` command
+to find upstream commits causing the conflicts.
+
 ### Special care for added commits
 
 > [!WARNING]
 >
-> Seeing an added commit at this point of the process should not happen, it
-> is very likely pointing to a commit that was applied AND reverted on the
-> new onto point, allowing it to be applied again.  Reverts are here for a
-> reason, so this needs investigation and likely dropping the commit on the
-> rebase because it was either deemed buggy or was superceded by a commit
-> fixing differently (hopefully in a better way) the same issue.
+> Seeing an added commit at this point of the process should not happen -
+> if it does it is very likely pointing to a commit that was applied AND
+> reverted (or partially reverted) on the new onto point, allowing it to be
+> applied again.  Reverts are here for a reason, so this needs
+> investigation and likely dropping the commit on the rebase because it was
+> either deemed buggy or was superceded by a commit fixing differently
+> (hopefully in a better way) the same issue.
 
-## Look for kABI breakage
+## Handling kABI breakage
 
 At this point the kernel RPMs built just fine but we don't know how much of
 the kABI has changed.  Our current policy with regards to kABI changes is
-that it MUST not change any kABI required by binary modules we are
-shipping.
+that it MUST not change any kABI required by binary modules we are shipping
+(otherwise, said modules need to be rebuilt, and a new install ISO
+generated).
 
 In order to know what's changed, we'll need two builds of the kernel RPMs,
 one before the rebase, and one after, with `KBUILD_SYMTYPES=y`, so that
@@ -626,7 +633,7 @@ patch that introduced the change.
 
 ## [WiP] How to fix kABI breakage
 
-### Identify breaking commit
+### Manually Identifiyng breaking commit
 
 The fastest way is to first identify where the symbol definition is coming
 from, e.g. for `struct cxgbi_sock` above, we'd:
@@ -647,9 +654,13 @@ The easiest way is obviously to revert the infringuing commit, but some
 tricks might be possible to avoid this last resort measures, check next
 chapters to see if it's possible depending on the change.
 
-### Unknown to full definition
-### Struct fields changes
-### Function prototype changes
+### Using `kabi tui`
+
+![kabi tui demo](imgs/demo.gif "kabi tui demo")
+
+#### Unknown to full definition
+#### Struct fields changes
+#### Function prototype changes
 
 ## Finalizing
 
