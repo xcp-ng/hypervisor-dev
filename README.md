@@ -32,15 +32,18 @@
     - [Dropped commits on the rebase have a reason](#dropped-commits-on-the-rebase-have-a-reason)
     - [Patch-ids changes have a reason documented](#patch-ids-changes-have-a-reason-documented)
     - [Special care for added commits](#special-care-for-added-commits)
-  - [Look for kABI breakage](#look-for-kabi-breakage)
+  - [Handling kABI breakage](#handling-kabi-breakage)
     - [Build kernel RPMs from before the rebase](#build-kernel-rpms-from-before-the-rebase)
     - [Repeat process for the rebased kernel](#repeat-process-for-the-rebased-kernel)
     - [Check if symbols we care about have been modified](#check-if-symbols-we-care-about-have-been-modified)
   - [[WiP] How to fix kABI breakage](#wip-how-to-fix-kabi-breakage)
-    - [Identify breaking commit](#identify-breaking-commit)
-    - [Unknown to full definition](#unknown-to-full-definition)
-    - [Struct fields changes](#struct-fields-changes)
-    - [Function prototype changes](#function-prototype-changes)
+    - [Manually Identifiyng breaking commit](#manually-identifiyng-breaking-commit)
+    - [Using `kabi tui`](#using-kabi-tui)
+      - [Unknown to full definition](#unknown-to-full-definition)
+      - [Struct field deletion](#struct-field-deletion)
+      - [Struct field addition](#struct-field-addition)
+      - [Struct field re-ordering](#struct-field-re-ordering)
+      - [Function prototype changes](#function-prototype-changes)
   - [Finalizing](#finalizing)
 
 <!-- markdown-toc end -->
@@ -658,8 +661,88 @@ chapters to see if it's possible depending on the change.
 
 ![kabi tui demo](imgs/demo.gif "kabi tui demo")
 
+The `kabi tui` is an interactive frontend that helps in neutralizing kABI
+changes.  It needs a few inputs in order to present information on changed
+types, pahole outputs (useful to find information about holes and padding),
+commits that introduced the kABI change:
+
+- `--repository`: Path to the linux repository, e.g. `--repository ~/repos/linux`
+- `--rev-list`: Git range before/after rebase, e.g. `--rev-list v4.19.19..v4.19.325-cip129`
+- `--old-vmlinux/--new-vmlinux`: Path to an unstripped vmlinux.o file, e.g. `--old-vmlinux vmlinux-4.19.19.o`
+- `--locked-file`: Path to the `kabi.locked_list`
+- `OLD_MODULES.KABI NEW_MODULES_KABI`: Path to `Symtypes.build|Modules.kabi` files for the base (old) and rebased (new) version of symbol types
+
 #### Unknown to full definition
-#### Struct fields changes
+#### Struct field deletion
+
+A field deletion is usually safe to ignore, so long as it doesn't change
+the offsets of sub-sequent fields.  If it does change offsets, it is fine
+to simply add it back and no code will use it.
+
+Example:
+
+```diff
+--- struct cfs_bandwidth
++++ struct cfs_bandwidth
+@@ -4,8 +4,6 @@
+    typedef u64 quota;
+    typedef u64 runtime;
+    typedef s64 hierarchical_quota;
+-   typedef u64 runtime_expires;
+-   int expires_seq;
+    short idle;
+    short period_active;
+    struct hrtimer period_timer
+```
+
+Commit deleting the field `502bd151448c ("sched/fair: Fix low cpu usage
+with high throttling by removing expiration of cpu-local slices")`.
+
+In this case those fields are really internal to the fair scheduler and are
+not supposed to be used outside.  In this case, it is safe to neutralize
+the kABI change by adding the fields back, to avoid sub-sequent fields from
+changing offsets.  As a defensive measure from any code using them, we will
+rename them so that we'd get build errors, and leave their name untouched
+for `genksyms`, such that no kABI changes are recorded by `genksyms`.
+
+The fix:
+```diff
+commit c327be40dc1cb1f4fc11799929b27f8035146a65
+Author: Quentin Casasnovas <quentin.casasnovas@vates.tech>
+Date:   Tue Feb 24 10:36:00 2026 +0100
+
+    !kabi sched/fair: Fix low cpu usage with high throttling by removing expiration of cpu-local slices
+
+    Fixes: 502bd151448c ("sched/fair: Fix low cpu usage with high throttling by removing expiration of cpu-local slices")
+    Signed-off-by: Quentin Casasnovas <quentin.casasnovas@vates.tech>
+
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index 55e695080fc6..24dc6c2f449e 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -337,6 +337,15 @@ struct cfs_bandwidth {
+        u64                     runtime;
+        s64                     hierarchical_quota;
+
++#ifdef __GENKSYMS__
++       typedef u64 runtime_expires;
++       int expires_seq;
++#else
++       /* Removed in: 502bd151448c sched/fair: Fix low cpu usage with high throttling by removing expiration of cpu-local slices */
++       typedef u64 __unused_runtime_expires;
++       int __unused_expires_seq;
++#endif
++
+        short                   idle;
+        short                   period_active;
+        struct hrtimer          period_timer;
+```
+
+#### Struct field addition
+#### Struct field re-ordering
+
+
+
 #### Function prototype changes
 
 ## Finalizing
