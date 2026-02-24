@@ -36,21 +36,21 @@
     - [Build kernel RPMs from before the rebase](#build-kernel-rpms-from-before-the-rebase)
     - [Repeat process for the rebased kernel](#repeat-process-for-the-rebased-kernel)
     - [Check if symbols we care about have been modified](#check-if-symbols-we-care-about-have-been-modified)
-  - [[WiP] How to fix kABI breakage](#wip-how-to-fix-kabi-breakage)
-    - [Manually Identifiyng breaking commit](#manually-identifiyng-breaking-commit)
-    - [Using `kabi tui`](#using-kabi-tui)
-      - [Neutralizing kABI changes](#neutralizing-kabi-changes)
+    - [How to neutralize kABI changes](#how-to-neutralize-kabi-changes)
+      - [Manually Identifiyng breaking commit](#manually-identifiyng-breaking-commit)
+      - [Using `kabi tui`](#using-kabi-tui)
+      - [Different types of kABI changes](#different-types-of-kabi-changes)
         - [Unknown to full definition](#unknown-to-full-definition)
         - [Struct field deletion](#struct-field-deletion)
         - [Struct field addition](#struct-field-addition)
-          - [If there extra holes that can be used](#if-there-extra-holes-that-can-be-used)
+          - [If there are extra holes that can be used](#if-there-are-extra-holes-that-can-be-used)
           - [If there are no holes](#if-there-are-no-holes)
         - [Struct field type change](#struct-field-type-change)
           - [No change in size of field](#no-change-in-size-of-field)
           - [Changes in size that fit a hole](#changes-in-size-that-fit-a-hole)
           - [Changes in size that do not fit a hole](#changes-in-size-that-do-not-fit-a-hole)
-      - [Struct field re-ordering](#struct-field-re-ordering)
-      - [Function prototype changes](#function-prototype-changes)
+        - [Struct field re-ordering](#struct-field-re-ordering)
+        - [Function prototype changes](#function-prototype-changes)
   - [Finalizing](#finalizing)
 
 <!-- markdown-toc end -->
@@ -58,18 +58,11 @@
 
 # Introduction
 
-Read [README.kabi.txt](scripts/README.kabi.txt) to get an introduction on
-Genksyms and kernel ABI.
-
-This high-level diagram shows the different files involved in the process:
-
-![kABI files](imgs/kabi_diagram.png "kABI files")
-
-> [!NOTE]
->
-> The workflows described here are still very manual.  In the future, many
-> of those manual steps will be automated so that the time is spent on
-> fixing problems as opposed to finding+fixing them.
+This repository contains information and tools in order to be able to
+maintain the XCP-ng Linux kernel.  This README will guide you through
+different maintainance activities like rebasing our patch-queue onto a new
+upstream base, adding a new binary driver to the list of drivers, pulling
+changes from the XenServer patch-queue.
 
 ## Pre-requisites
 
@@ -90,18 +83,18 @@ pip install -e ./
 
 ## Pull and get all sub-modules
 
-Let's make sure we work on top of master and that we have all the drivers
+Let's make sure we work on top of main and that we have all the drivers
 sub-modules properly initialized as a pre-requisite step.
 
 ```bash
-git pull --rebase origin master
-git submodule --init
+git pull --rebase origin main
+git submodule update --init
 ```
 
 ## Add the new RPM repo as sub-module
 
 ```bash
-git submodule add <driver_name> <driver_repo>
+git submodule add <driver_repo> drivers/<driver_name>
 git commit -s -m "<driver_name>: add to the list of submodules."
 ```
 
@@ -241,7 +234,7 @@ diff --git a/SPECS/kernel.spec b/SPECS/kernel.spec
 index 181b3a467d87..5997a384f4ef 100644
 --- a/SPECS/kernel.spec
 +++ b/SPECS/kernel.spec
-## -162,6 +162,6 @@  Patch75: 0002-gfs2-clean_journal-improperly-set-sd_log_flush_head.patch
+@@ -162,6 +162,6 @@  Patch75: 0002-gfs2-clean_journal-improperly-set-sd_log_flush_head.patch
  Patch76: 0001-gfs2-Replace-gl_revokes-with-a-GLF-flag.patch
  Patch77: 0005-gfs2-Remove-misleading-comments-in-gfs2_evict_inode.patch
 -Patch78: 0006-gfs2-Rename-sd_log_le_-revoke-ordered.patch
@@ -331,7 +324,7 @@ index 181b3a467d87..5997a384f4ef 100644
 
 -Source0: kernel-4.19.19.tar.gz
 +Source0: linux-4.19.325.tar.gz
- Source1: kernel-x86_64.
+ Source1: kernel-x86_64.config
  ```
 
 Commit as usual the resulting changes.
@@ -421,7 +414,7 @@ terminal find the container id and copy the config file from it:
 docker ps
 
 # Copy the .config
-docker cp <container_id>:/home/builder/rpmbuild/BUILD/linux-4.19.325/.config /path/to/rpm/repo/SOURCES/kernel-x86-64.config
+docker cp <container_id>:/home/builder/rpmbuild/BUILD/linux-4.19.325/.config /path/to/rpm/repo/SOURCES/kernel-x86_64.config
 
 ```
 
@@ -519,6 +512,15 @@ to find upstream commits causing the conflicts.
 
 ## Handling kABI breakage
 
+> [!NOTE]
+>
+> [README.kabi.txt](scripts/README.kabi.txt) contains an introduction on
+> genksyms and the kabi tool - if you are not familiar with those you
+> should start there.
+>
+> This high-level diagram shows the different files involved in the process:
+> ![kABI files](imgs/kabi_diagram.png "kABI files")
+
 At this point the kernel RPMs built just fine but we don't know how much of
 the kABI has changed.  Our current policy with regards to kABI changes is
 that it MUST not change any kABI required by binary modules we are shipping
@@ -555,7 +557,7 @@ xcp-ng-dev container build 8.3 ./
 Collect all the types information with:
 
 ```bash
-./scripts/kabi collect /path/to/rpm/repo/BUILD/kernel-4.19.19 --output ./kernel-abis/Symtypes.build-v4.19.19
+./scripts/kabi collect /path/to/rpm/repo/BUILD/kernel-4.19.19 --output ./kernel-abis/Symtypes.build-4.19.19
 
 ```
 
@@ -579,7 +581,7 @@ xcp-ng-dev container build 8.3 ./
 Collect all the types information:
 
 ```bash
-./scripts/kabi collect /path/to/rpm/repo/BUILD/linux-4.19.325 --output ./kernel-abis/Symtypes.build-v4.19.325
+./scripts/kabi collect /path/to/rpm/repo/BUILD/linux-4.19.325 --output ./kernel-abis/Symtypes.build-4.19.325
 ```
 
 Minimize the Symtypes file to only include symbols that are used by binary
@@ -641,9 +643,9 @@ Typical output will look like this:
 Each change will require either a kABI fix, if possible, or reverting the
 patch that introduced the change.
 
-## [WiP] How to fix kABI breakage
+### How to neutralize kABI changes
 
-### Manually Identifiyng breaking commit
+#### Manually Identifiyng breaking commit
 
 The fastest way is to first identify where the symbol definition is coming
 from, e.g. for `struct cxgbi_sock` above, we'd:
@@ -660,11 +662,11 @@ $ git log --oneline -G 'completion cmpl;'  --right-only ${prev_branch}..HEAD -- 
 4c3b23e90307 scsi: cxgb4i: add wait_for_completion()
 ```
 
-The easiest way is obviously to revert the infringuing commit, but some
+The easiest way is obviously to revert the infringing commit, but some
 tricks might be possible to avoid this last resort measures, check next
 chapters to see if it's possible depending on the change.
 
-### Using `kabi tui`
+#### Using `kabi tui`
 
 ![kabi tui demo](imgs/demo.gif "kabi tui demo")
 
@@ -680,7 +682,7 @@ commits that introduced the kABI change:
 - `OLD_MODULES.KABI NEW_MODULES_KABI`: Path to `Symtypes.build|Modules.kabi` files for the base (old) and rebased (new) version of symbol types
 
 
-#### Neutralizing kABI changes
+#### Different types of kABI changes
 
 Before we dive in into the various ways to neutralize kABI changes, here's
 a handy git alias you can add to commit with information on what commit we
@@ -693,11 +695,15 @@ are neutralizing the kabi for:
 ```
 
 ##### Unknown to full definition
+
+> [!NOTE]
+> This chapter is in progress
+
 ##### Struct field deletion
 
 A field deletion is usually safe to ignore, so long as it doesn't change
-the offsets of sub-sequent fields.  If it does change offsets, it is fine
-to simply add it back and no code will use it.
+the offsets of subsequent fields.  If it does change offsets, it is fine to
+simply add it back and no code will use it.
 
 Example:
 
@@ -720,7 +726,7 @@ with high throttling by removing expiration of cpu-local slices")`.
 
 In this case those fields are really internal to the fair scheduler and are
 not supposed to be used outside.  In this case, it is safe to neutralize
-the kABI change by adding the fields back, to avoid sub-sequent fields from
+the kABI change by adding the fields back, to avoid subsequent fields from
 changing offsets.  As a defensive measure from any code using them, we will
 rename them so that we'd get build errors, and leave their name untouched
 for `genksyms`, such that no kABI changes are recorded by `genksyms`.
@@ -761,10 +767,10 @@ index 55e695080fc6..24dc6c2f449e 100644
 ##### Struct field addition
 
 Struct field addition are usually the more complex to neutralize because
-they tend to change offsets of all sub-sequent fields, unless you're lucky
+they tend to change offsets of all subsequent fields, unless you're lucky
 and they end up right on a hole (check the `pahole` view).
 
-###### If there extra holes that can be used
+###### If there are extra holes that can be used
 
 Example with commit `53441f8e0185 ("PCI/ACPI: Fix runtime PM ref imbalance
 on Hot-Plug Capable ports")`
@@ -863,10 +869,17 @@ further.
 
 Example
 
+> [!NOTE]
+> This chapter is in progress
+
 
 ##### Struct field type change
 
 ###### No change in size of field
+
+Sometimes a const qualifier is added/removed, or the type changes without
+affecting the size of the field (for example `int` to `unsigned int`).  In
+those cases, it is usually safe to hide the changes from `genksyms`.
 
 Example commit `f613189ab5c7 ("tracing: Constify string literal data member
 in struct trace_event_call")`
@@ -920,18 +933,162 @@ index bcd611d19f72..10cf82c96d71 100644
         };
 ```
 
-
-
 ###### Changes in size that fit a hole
+
+Sometimes a field gets expanded and "swallow" a neighbour hole. In those
+cases it should be fine to simply hide the change from `genksyms`.
+
+Example commit `aab312696d37 ("crypto: public_key: fix overflow during
+implicit conversion")`:
+
+```diff
+--- a/include/crypto/public_key.h
++++ b/include/crypto/public_key.h
+@@ -35,9 +35,9 @@ extern void public_key_free(struct public_key *key);
+ struct public_key_signature {
+        struct asymmetric_key_id *auth_ids[2];
+        u8 *s;                  /* Signature */
+        u32 s_size;             /* Number of bytes in signature */
+        u8 *digest;
+-       u8 digest_size;         /* Number of bytes in digest */
++       u32 digest_size;        /* Number of bytes in digest */
+        const char *pkey_algo;
+        const char *hash_algo;
+ };
+```
+
+If we look at the `pahole` view, we'll see that there were three bytes hole
+after the `digest_size`, so the `u32 digest_size` can be expanded here
+without having an effect on either its own offset within the struct, nor to
+the next field offsets.  The fix:
+
+```diff
+commit 61951e312e8f044b6c8a62941df8370bc348e59e
+Author: Quentin Casasnovas <quentin.casasnovas@vates.tech>
+Date:   Sat Jan 31 16:18:10 2026 +0100
+
+    !kabi crypto: public_key: fix overflow during implicit conversion
+
+    The original struct had enough padding to convert from u8 to u32
+    digest_size without changing offsets:
+
+       struct public_key_signature {
+               struct asymmetric_key_id * auth_ids[2];          /*     0    16 */
+               u8 *                       s;                    /*    16     8 */
+               u32                        s_size;               /*    24     4 */
+
+               /* XXX 4 bytes hole, try to pack */
+
+               u8 *                       digest;               /*    32     8 */
+               u8                         digest_size;          /*    40     1 */
+
+               /* XXX 7 bytes hole, try to pack */
+                      ^^^^^^^^^^^^
+               const char  *              pkey_algo;            /*    48     8 */
+               const char  *              hash_algo;            /*    56     8 */
+
+               /* size: 64, cachelines: 1, members: 7 */
+               /* sum members: 53, holes: 2, sum holes: 11 */
+       };
+
+    After the change:
+
+       struct public_key_signature {
+               struct asymmetric_key_id * auth_ids[2];          /*     0    16 */
+               u8 *                       s;                    /*    16     8 */
+               u32                        s_size;               /*    24     4 */
+
+               /* XXX 4 bytes hole, try to pack */
+
+               u8 *                       digest;               /*    32     8 */
+               u32                        digest_size;          /*    40     4 */
+
+               /* XXX 4 bytes hole, try to pack */
+                      ^^^^^^^^^^^^
+               const char  *              pkey_algo;            /*    48     8 */
+               const char  *              hash_algo;            /*    56     8 */
+
+               /* size: 64, cachelines: 1, members: 7 */
+               /* sum members: 53, holes: 2, sum holes: 8 */
+       };
+
+    Fixes: aab312696d37 ("crypto: public_key: fix overflow during implicit conversion")
+    Signed-off-by: Quentin Casasnovas <quentin.casasnovas@vates.tech>
+
+diff --git a/include/crypto/public_key.h b/include/crypto/public_key.h
+index 052e26fda2e6..9c68984da215 100644
+--- a/include/crypto/public_key.h
++++ b/include/crypto/public_key.h
+@@ -35,9 +35,18 @@ extern void public_key_free(struct public_key *key);
+ struct public_key_signature {
+ 	struct asymmetric_key_id *auth_ids[2];
+ 	u8 *s;			/* Signature */
+ 	u32 s_size; 		/* Number of bytes in signature */
+ 	u8 *digest;
++#ifndef __GENKSYMS__
++	/*
++	 * Type change in aab312696d37 ("crypto: public_key: fix overflow
++	 * during implicit conversion"), luckily there was a three bytes
++	 * hole to make it fit.
++	 */
+ 	u32 digest_size;	/* Number of bytes in digest */
++#else
++	u8 digest_size;		/* Number of bytes in digest */
++#endif
+ 	const char *pkey_algo;
+ 	const char *hash_algo;
+ };
+
+```
+
 
 ###### Changes in size that do not fit a hole
 
+> [!NOTE]
+> This chapter is in progress
 
-#### Struct field re-ordering
+##### Struct field re-ordering
+
+These are the easiest to neutralize as we should be able to re-order the
+fields back to where they were.  Example commit `aab312696d37 ("crypto:
+public_key: fix overflow during implicit conversion")`:
+
+```diff
+--- a/include/crypto/public_key.h
++++ b/include/crypto/public_key.h
+@@ -35,9 +35,9 @@ extern void public_key_free(struct public_key *key);
+ struct public_key_signature {
+        struct asymmetric_key_id *auth_ids[2];
+        u8 *s;                  /* Signature */
+-       u32 s_size;             /* Number of bytes in signature */
+        u8 *digest;
+        u8 digest_size;         /* Number of bytes in digest */
++       u32 s_size;             /* Number of bytes in signature */
+```
+
+`s_size` was moved up in order to avoid a 4 bytes hole in the struct, which
+we don't really care about.
+
+The kABI fix simply puts the field back in place:
+
+```diff
+--- a/include/crypto/public_key.h
++++ b/include/crypto/public_key.h
+@@ -35,9 +35,18 @@ extern void public_key_free(struct public_key *key);
+ struct public_key_signature {
+        struct asymmetric_key_id *auth_ids[2];
+        u8 *s;                  /* Signature */
++       u32 s_size;             /* Number of bytes in signature */
+        u8 *digest;
+-       u32 s_size;             /* Number of bytes in signature */
+        u8 digest_size;         /* Number of bytes in digest */
+```
 
 
+##### Function prototype changes
 
-#### Function prototype changes
+> [!NOTE]
+> This chapter is in progress
 
 ## Finalizing
 
@@ -940,10 +1097,16 @@ a branch with `git-import-srpm`, make sure you have no diff with the branch
 you were working on in the source repo.  If all is good, you can push your
 src rpm repo branch, and trigger a scratch build:
 
+> [!NOTE]
+>
+> You can check the [koji documentation](https://github.com/xcp-ng/xcp-ng-build-env)
+
 ```bash
-koji_build.py --scratch v8.3-incoming .
+koji_build.py --scratch v8.3-incoming
 ```
 
-Monitor for build errors as usual, and if all is good, time for testing
-your build and making sure all our drivers can be modprobed without the
-kernel module loader complaining about symbol versions mismatches.
+From this point, you can follow our regular process to make a kernel release.
+
+> [!NOTE]
+>
+> Add link to instruction on our process
