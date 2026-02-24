@@ -39,9 +39,16 @@
   - [[WiP] How to fix kABI breakage](#wip-how-to-fix-kabi-breakage)
     - [Manually Identifiyng breaking commit](#manually-identifiyng-breaking-commit)
     - [Using `kabi tui`](#using-kabi-tui)
-      - [Unknown to full definition](#unknown-to-full-definition)
-      - [Struct field deletion](#struct-field-deletion)
-      - [Struct field addition](#struct-field-addition)
+      - [Neutralizing kABI changes](#neutralizing-kabi-changes)
+        - [Unknown to full definition](#unknown-to-full-definition)
+        - [Struct field deletion](#struct-field-deletion)
+        - [Struct field addition](#struct-field-addition)
+          - [If there extra holes that can be used](#if-there-extra-holes-that-can-be-used)
+          - [If there are no holes](#if-there-are-no-holes)
+        - [Struct field type change](#struct-field-type-change)
+          - [No change in size of field](#no-change-in-size-of-field)
+          - [Changes in size that fit a hole](#changes-in-size-that-fit-a-hole)
+          - [Changes in size that do not fit a hole](#changes-in-size-that-do-not-fit-a-hole)
       - [Struct field re-ordering](#struct-field-re-ordering)
       - [Function prototype changes](#function-prototype-changes)
   - [Finalizing](#finalizing)
@@ -672,8 +679,21 @@ commits that introduced the kABI change:
 - `--locked-file`: Path to the `kabi.locked_list`
 - `OLD_MODULES.KABI NEW_MODULES_KABI`: Path to `Symtypes.build|Modules.kabi` files for the base (old) and rebased (new) version of symbol types
 
-#### Unknown to full definition
-#### Struct field deletion
+
+#### Neutralizing kABI changes
+
+Before we dive in into the various ways to neutralize kABI changes, here's
+a handy git alias you can add to commit with information on what commit we
+are neutralizing the kabi for:
+
+```config
+[alias]
+	kabi = "!f() { git commit -s -e -m \"!kabi $(git log --format=%s -1 $1)\n\n\nFixes: $(git log --format=\"%h (\\\"%s\\\")\" --no-decorate -1 $1)\"; }; f"
+	rkabi = "!f() { git commit -s -e -m \"!kabi Revert: $(git log --format=%s -1 $1)\n\n\nReverts: $(git log --format=\"%h (\\\"%s\\\")\" --no-decorate -1 $1)\"; }; f"
+```
+
+##### Unknown to full definition
+##### Struct field deletion
 
 A field deletion is usually safe to ignore, so long as it doesn't change
 the offsets of sub-sequent fields.  If it does change offsets, it is fine
@@ -738,7 +758,175 @@ index 55e695080fc6..24dc6c2f449e 100644
         struct hrtimer          period_timer;
 ```
 
-#### Struct field addition
+##### Struct field addition
+
+Struct field addition are usually the more complex to neutralize because
+they tend to change offsets of all sub-sequent fields, unless you're lucky
+and they end up right on a hole (check the `pahole` view).
+
+###### If there extra holes that can be used
+
+Example with commit `53441f8e0185 ("PCI/ACPI: Fix runtime PM ref imbalance
+on Hot-Plug Capable ports")`
+
+```diff
+--- struct pci_dev
++++ struct pci_dev
+@@ -77,6 +77,7 @@
+    unsigned int is_virtfn : 1;
+    unsigned int reset_fn : 1;
+    unsigned int is_hotplug_bridge : 1;
++   unsigned int is_pciehp : 1;
+    unsigned int shpc_managed : 1;
+    unsigned int is_thunderbolt : 1;
+    unsigned int __aer_firmware_first_valid : 1;
+```
+
+In this example, the commit added an extra bit-field, used by the core PCI
+sub-system.  We can note from the `pahole` view that there was a 5 bits
+hole inside the `struct pci_dev`:
+
+```C
+struct pci_dev {
+    /* ... */
+
+    unsigned int               reset_fn:1;           /*  2000:31  4 */
+    unsigned int               is_hotplug_bridge:1;  /*  2004: 0  4 */
+    unsigned int               shpc_managed:1;       /*  2004: 1  4 */
+    unsigned int               is_thunderbolt:1;     /*  2004: 2  4 */
+    unsigned int               __aer_firmware_first_valid:1; /*  2004: 3  4
+    unsigned int               __aer_firmware_first:1; /*  2004: 4  4 */
+    unsigned int               broken_intx_masking:1; /*  2004: 5  4 */
+    unsigned int               io_window_1k:1;       /*  2004: 6  4 */
+    unsigned int               irq_managed:1;        /*  2004: 7  4 */
+    unsigned int               has_secondary_link:1; /*  2004: 8  4 */
+    unsigned int               non_compliant_bars:1; /*  2004: 9  4 */
+    unsigned int               is_probed:1;          /*  2004:10  4 */
+
+    /* XXX 5 bits hole, try to pack */
+```
+
+We can then simply move the new field inside the hole, to make sure that no
+other offsets are modified, and hide the new field from genksyms:
+
+```diff
+commit acf336abedfd3926c3cc1de4b6bc0b3bb7c7a2b7
+Author: Quentin Casasnovas <quentin.casasnovas@vates.tech>
+Date:   Tue Feb 24 10:56:20 2026 +0100
+
+    !kabi PCI/ACPI: Fix runtime PM ref imbalance on Hot-Plug Capable ports
+
+    Fixes: 53441f8e0185 ("PCI/ACPI: Fix runtime PM ref imbalance on Hot-Plug Capable ports")
+    Signed-off-by: Quentin Casasnovas <quentin.casasnovas@vates.tech>
+
+diff --git a/include/linux/pci.h b/include/linux/pci.h
+index b60e4ace3504..0c1afef354e9 100644
+--- a/include/linux/pci.h
++++ b/include/linux/pci.h
+@@ -409,7 +409,6 @@ struct pci_dev {
+        unsigned int    is_virtfn:1;
+        unsigned int    reset_fn:1;
+        unsigned int    is_hotplug_bridge:1;
+-       unsigned int    is_pciehp:1;
+        unsigned int    shpc_managed:1;         /* SHPC owned by shpchp */
+        unsigned int    is_thunderbolt:1;       /* Thunderbolt controller */
+        unsigned int    __aer_firmware_first_valid:1;
+@@ -420,6 +419,13 @@ struct pci_dev {
+        unsigned int    has_secondary_link:1;
+        unsigned int    non_compliant_bars:1;   /* Broken BARs; ignore them */
+        unsigned int    is_probed:1;            /* Device probing in progress */
++#ifndef __GENKSYMS__
++       /*
++        * Added in 53441f8e0185 ("PCI/ACPI: Fix runtime PM ref imbalance
++        * on Hot-Plug Capable ports") - moved into a hole.
++        */
++       unsigned int    is_pciehp:1;
++#endif
+        pci_dev_flags_t dev_flags;
+        atomic_t        enable_cnt;     /* pci_enable_device has been called */
+```
+
+###### If there are no holes
+
+These are the most difficult kABI changes to neutralize as there is no room
+in the original struct to stuff the new field in.  First, let's take a
+moment to see if the commit introducing this difficult change is a
+must-have, sometimes it might be okay to simply revert the commit if it
+doesn't bring anything interesting.
+
+If we really want the commit (it might be improving performances somewhere
+we want, or is a security fix), there comes the bazooka option of using the
+[shadow live patching API](https://docs.kernel.org/livepatch/shadow-vars.html).
+
+Make sure you have read the documentation and understand it before going
+further.
+
+Example
+
+
+##### Struct field type change
+
+###### No change in size of field
+
+Example commit `f613189ab5c7 ("tracing: Constify string literal data member
+in struct trace_event_call")`
+
+```diff
+--- struct trace_event_call
++++ struct trace_event_call
+@@ -2,7 +2,7 @@
+    struct list_head list;
+    struct trace_event_class *class;
+    union {
+-       char *name;
++       const char *name;
+        struct tracepoint *tp;
+    };
+    struct trace_event event;
+```
+
+Here we can simply hide the change from `genksyms`:
+
+```diff
+commit b1cc3ada2c31b1cc66c3954fa53bbd5f8003435b
+Author: Quentin Casasnovas <quentin.casasnovas@vates.tech>
+Date:   Tue Feb 24 11:14:11 2026 +0100
+
+    !kabi tracing: Constify string literal data member in struct trace_event_call
+
+    Fixes: f613189ab5c7 ("tracing: Constify string literal data member in struct trace_event_call")
+    Signed-off-by: Quentin Casasnovas <quentin.casasnovas@vates.tech>
+
+diff --git a/include/linux/trace_events.h b/include/linux/trace_events.h
+index bcd611d19f72..10cf82c96d71 100644
+--- a/include/linux/trace_events.h
++++ b/include/linux/trace_events.h
+@@ -254,7 +254,15 @@ struct trace_event_call {
+        struct list_head        list;
+        struct trace_event_class *class;
+        union {
+-               const char              *name;
++#ifndef __GENKSYMS__
++               /*
++                * Was constified in f613189ab5c7 ("tracing: Constify
++                * string literal data member in struct trace_event_call")
++                */
++               const char *name;
++#else
++               char *name;
++#endif
+                /* Set TRACE_EVENT_FL_TRACEPOINT flag when using "tp" */
+                struct tracepoint       *tp;
+        };
+```
+
+
+
+###### Changes in size that fit a hole
+
+###### Changes in size that do not fit a hole
+
+
 #### Struct field re-ordering
 
 
