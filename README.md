@@ -2,6 +2,7 @@
 **Table of Contents**
 
 - [Introduction](#introduction)
+  - [Branch convention](#branch-convention)
   - [Pre-requisites](#pre-requisites)
     - [Get a working build environment](#get-a-working-build-environment)
 - [Adding a new binary kernel module](#adding-a-new-binary-kernel-module)
@@ -17,40 +18,39 @@
       - [If yes](#if-yes)
       - [If no](#if-no)
     - [Create a branch from the rebased HEAD](#create-a-branch-from-the-rebased-head)
-    - [Build Kernel RPMs](#build-kernel-rpms)
-      - [Update the origin tarball](#update-the-origin-tarball)
-        - [Download](#download)
-        - [Verify the signature of your tarball:](#verify-the-signature-of-your-tarball)
-        - [Commit](#commit)
-      - [Build the kernel RPMs](#build-the-kernel-rpms)
-        - [Builds failures](#builds-failures)
-          - [Incorrect conflict resolution](#incorrect-conflict-resolution)
-          - [Kernel .config check fails](#kernel-config-check-fails)
-          - [kABI breaking changes](#kabi-breaking-changes)
-    - [Verify source RPM generate the same sources](#verify-source-rpm-generate-the-same-sources)
+  - [Update the origin tarball](#update-the-origin-tarball)
+    - [Download](#download)
+    - [Verify the signature of your tarball:](#verify-the-signature-of-your-tarball)
+    - [Commit](#commit)
+  - [Build the kernel RPMs](#build-the-kernel-rpms)
+    - [Builds failures](#builds-failures)
+      - [Incorrect conflict resolution](#incorrect-conflict-resolution)
+      - [Kernel .config check fails](#kernel-config-check-fails)
+      - [kABI breaking changes](#kabi-breaking-changes)
+  - [Verify source RPM generate the same sources](#verify-source-rpm-generate-the-same-sources)
   - [Review your rebase](#review-your-rebase)
     - [Dropped commits on the rebase have a reason](#dropped-commits-on-the-rebase-have-a-reason)
     - [Patch-ids changes have a reason documented](#patch-ids-changes-have-a-reason-documented)
     - [Special care for added commits](#special-care-for-added-commits)
-  - [Handling kABI breakage](#handling-kabi-breakage)
-    - [Build kernel RPMs from before the rebase](#build-kernel-rpms-from-before-the-rebase)
-    - [Repeat process for the rebased kernel](#repeat-process-for-the-rebased-kernel)
-    - [Check if symbols we care about have been modified](#check-if-symbols-we-care-about-have-been-modified)
-    - [How to neutralize kABI changes](#how-to-neutralize-kabi-changes)
-      - [Manually Identifiyng breaking commit](#manually-identifiyng-breaking-commit)
-      - [Using `kabi tui`](#using-kabi-tui)
-      - [Different types of kABI changes](#different-types-of-kabi-changes)
-        - [Unknown to full definition](#unknown-to-full-definition)
-        - [Struct field deletion](#struct-field-deletion)
-        - [Struct field addition](#struct-field-addition)
-          - [If there are extra holes that can be used](#if-there-are-extra-holes-that-can-be-used)
-          - [If there are no holes](#if-there-are-no-holes)
-        - [Struct field type change](#struct-field-type-change)
-          - [No change in size of field](#no-change-in-size-of-field)
-          - [Changes in size that fit a hole](#changes-in-size-that-fit-a-hole)
-          - [Changes in size that do not fit a hole](#changes-in-size-that-do-not-fit-a-hole)
-        - [Struct field re-ordering](#struct-field-re-ordering)
-        - [Function prototype changes](#function-prototype-changes)
+- [Handling kABI breakage](#handling-kabi-breakage)
+  - [Build last release kernel RPM](#build-last-release-kernel-rpm)
+  - [Repeat process for the changed kernel](#repeat-process-for-the-changed-kernel)
+  - [List modified types](#list-modified-types)
+  - [How to neutralize kABI changes](#how-to-neutralize-kabi-changes)
+    - [Manually Identifying breaking commit](#manually-identifying-breaking-commit)
+    - [Using `kabi tui`](#using-kabi-tui)
+    - [Different types of kABI changes](#different-types-of-kabi-changes)
+      - [Unknown to full definition](#unknown-to-full-definition)
+      - [Struct field deletion](#struct-field-deletion)
+      - [Struct field addition](#struct-field-addition)
+        - [If there are extra holes that can be used](#if-there-are-extra-holes-that-can-be-used)
+        - [If there are no holes](#if-there-are-no-holes)
+      - [Struct field type change](#struct-field-type-change)
+        - [No change in size of field](#no-change-in-size-of-field)
+        - [Changes in size that fit a hole](#changes-in-size-that-fit-a-hole)
+        - [Changes in size that do not fit a hole](#changes-in-size-that-do-not-fit-a-hole)
+      - [Struct field re-ordering](#struct-field-re-ordering)
+      - [Function prototype changes](#function-prototype-changes)
   - [Finalizing](#finalizing)
 
 <!-- markdown-toc end -->
@@ -60,9 +60,29 @@
 
 This repository contains information and tools in order to be able to
 maintain the XCP-ng Linux kernel.  This README will guide you through
-different maintainance activities like rebasing our patch-queue onto a new
+different maintenance activities like rebasing our patch-queue onto a new
 upstream base, adding a new binary driver to the list of drivers, pulling
-changes from the XenServer patch-queue.
+changes from the XenServer patch-queue, handling kABI breakage after an
+update to the Linux kernel.
+
+
+## Branch convention
+
+We currently use a branch convention in the source code repositories
+maintained by the Hypervisor & Kernel team at vates, where for each
+released package (qemu, xen, linux), a corresponding source branch is
+created in the form:
+
+```
+<product>/xcpng-<version>-<release>/base
+```
+
+Where product would be `kernel` for the Linux kernel, e.g.: `kernel/xcpng-4.19.325-cip129.8.0.44.1/base`.
+
+For each `/base` branch, a corresponding `/pre-base` branch is created from
+the upstream point where the patch-queue of our SRPM was applied onto.  As
+such, our patch-queue can be found with the range `/pre-base../base`.
+
 
 ## Pre-requisites
 
@@ -75,7 +95,7 @@ cd xcp-ng-build-env
 # Build the docker image
 ./container/build.sh 8.3
 
-# Install the xcp-ng-dev CLI through
+# Install the xcp-ng-dev CLI
 pip install -e ./
 ```
 
@@ -101,8 +121,16 @@ git commit -s -m "<driver_name>: add to the list of submodules."
 ## Refreshing the kabi.locked_list file
 
 As a new driver is added, we need to make sure we do not break the kABI it
-relies in future kernel updates.  This will rebuild locally all the drivers
-so that we can extract all the exported symbols they reference.
+relies in future kernel updates.
+
+In order to do, we maintain a file listing all the symbols our binary
+drivers are using from the linux kernel in
+`kernel-abis/xcpng-8.3-kabi_lockedlist`.
+
+We need to refresh this file to include symbols from the newly added
+driver, the [generate_locked_list.sh](scripts/generate_locked_list.sh)
+script does just that:
+
 
 ```bash
 
@@ -137,13 +165,18 @@ We'll need two different tools present in a separate repository,
 available:
 
 ```bash
+# git-review-rebase
 git clone git@github.com:xcp-ng/git-review-rebase.git
 cd git-review-rebase
 pip install -e ./
+
+# git-import-srpm
+git clone git@github.com:xcp-ng/xcp.git
 ```
 
 Note that `git-import-srpm` is a simple bash script and doesn't need any
-prior configuration before use, it is present in `scripts/git-import-srpm`.
+prior configuration before use, it is present in
+`/path/to/xcp/repo/scripts/git-import-srpm`.
 
 ## Rebase the kernel to latest upstream
 
@@ -254,15 +287,9 @@ cd /path/to/source/repo
 git checkout -B <your-name>-rebase-to-4.19.325
 ```
 
-### Build Kernel RPMs
+## Update the origin tarball
 
-Make sure all changes to the `SPECS/kernel.spec` file are committed and
-that any modified patches are also added at this point (`git status -u`
-ftw).
-
-#### Update the origin tarball
-
-##### Download
+### Download
 
 Because the starting point of the patch-queue is different, you'll need to
 download a tarball matching the onto point you've used, as well as its
@@ -271,7 +298,7 @@ signature file:
 - [linux-4.19.325.tar.gz](https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.19.325.tar.gz)
 - [linux-4.19.325.tar.sign](https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.19.325.tar.sign)
 
-##### Verify the signature of your tarball:
+### Verify the signature of your tarball:
 
 ```bash
 gunzip --keep linux-4.19.325.tar.gz
@@ -287,7 +314,7 @@ gpg --locate-keys torvalds@kernel.org gregkh@kernel.org
 Double check the key signatures you've imported with [kernel.org
 signatures](https://www.kernel.org/category/signatures.html)
 
-##### Commit
+### Commit
 
 Once everything is verified, you can add the unmodified tarball into the
 SOURCES directory and update the `Source0` line of the `SPECS/kernel.spec`
@@ -353,17 +380,19 @@ Commit as usual the resulting changes.
 >  %build
 > ```
 
-#### Build the kernel RPMs
+## Build the kernel RPMs
+
+We should be ready to start building at this point:
 
 ```bash
 cd /path/to/rpm/repo
 xcp-ng-dev container build 8.3 ./
 ```
 
-##### Builds failures
+### Builds failures
 
 
-###### Incorrect conflict resolution
+#### Incorrect conflict resolution
 
 Go back to the source repository, find the commit that introduced the build
 failure, and rework it, e.g.:
@@ -402,7 +431,7 @@ changes, and re-run a build.  Repeat until it succeeds.
 > builds.  If you do that, you'll still need a final run xcp-ng-dev
 > container build to make sure everything is good to go from scratch.
 
-###### Kernel .config check fails
+#### Kernel .config check fails
 
 A source of errors when building the RPM is when the defconfig has changed,
 to update it you can use `--no-exit` to your `xcp-ng-dev container build`
@@ -424,16 +453,15 @@ adding or removing any important kernel config.  You can then try again to
 build the RPM.
 
 
-###### kABI breaking changes
+#### kABI breaking changes
 
 Once the kernel is built, the `check-kabi` script will compare the
 `Modules.symvers` file with the `Module.kabi` file included in the source
-and will fail if any symbols were changed.  You can ignore this problem for
-now and consider the build as succeeding as the `check-kabi` runs late in
-the process.  You can follow the rest of the chapter, and handle kABI
-breakage later in [Look for kABI breakage](#look-for-kabi-breakage).
+and will fail if any symbols were changed.  You can follow the chapter [How
+to neutralize kABI changes](#how-to-neutralize-kabi-changes) to neutralize
+those changes.
 
-### Verify source RPM generate the same sources
+## Verify source RPM generate the same sources
 
 Once your rebase is done and your RPM builds just fine, it is important to
 verify that your src RPM will generate the same sources.
@@ -441,7 +469,7 @@ verify that your src RPM will generate the same sources.
 ```bash
 cd /path/to/rpm/repo
 git commit -s -m "kernel: rebase to v4.19.325"
-~/path/to/xcp/repo/scripts/git-import-srpm HEAD
+/path/to/xcp/repo/scripts/git-import-srpm HEAD
 ```
 
 This should create a new branch, you can then use `git diff
@@ -457,9 +485,9 @@ Go check its [README](https://github.com/xcp-ng/git-review-rebase) for more info
 
 ### Dropped commits on the rebase have a reason
 
-There maybe commits that were present on the previous branch that simply do
-not apply on top of the new onto point.  These are not to be confused with
-commits that were present in the initial rebased range and that were
+There may be commits that were present on the previous branch that simply
+do not apply on top of the new onto point.  These are not to be confused
+with commits that were present in the initial rebased range and that were
 dropped during the rebase because an equivalent commit was present as
 ancestor of the new onto point, as those should not show as dropped in the
 `git-review-rebase` TUI, instead they'll show as matched to their
@@ -488,7 +516,7 @@ appears as "dropped", and the reason is documented.
 
 Most patch-id changes imply there was a conflict during the rebase - as
 such, a clear explanation as to what was the conflict as well _why_ there
-was a conflict (i.e. pointing to the commit in the new onto that lead to
+was a conflict (i.e. pointing to the commit in the new onto that led to
 the conflict) MUST be present in the commit description to facilitate
 reviews and document the problems.
 
@@ -507,10 +535,10 @@ to find upstream commits causing the conflicts.
 > reverted (or partially reverted) on the new onto point, allowing it to be
 > applied again.  Reverts are here for a reason, so this needs
 > investigation and likely dropping the commit on the rebase because it was
-> either deemed buggy or was superceded by a commit fixing differently
+> either deemed buggy or was superseded by a commit fixing differently
 > (hopefully in a better way) the same issue.
 
-## Handling kABI breakage
+# Handling kABI breakage
 
 > [!NOTE]
 >
@@ -521,19 +549,17 @@ to find upstream commits causing the conflicts.
 > This high-level diagram shows the different files involved in the process:
 > ![kABI files](imgs/kabi_diagram.png "kABI files")
 
-At this point the kernel RPMs built just fine but we don't know how much of
-the kABI has changed.  Our current policy with regards to kABI changes is
-that it MUST not change any kABI required by binary modules we are shipping
-(otherwise, said modules need to be rebuilt, and a new install ISO
-generated).
+Our current policy with regards to kABI changes is that it MUST not change
+any kABI required by binary modules we are shipping (otherwise, said
+modules need to be rebuilt, and a new install ISO generated).
 
-In order to know what's changed, we'll need two builds of the kernel RPMs,
-one before the rebase, and one after, with `KBUILD_SYMTYPES=y`, so that
-metadata about types are saved and we can use them to infer which commits
-introduced the kABI changes.  To learn more about this, you can read the
-[README.kabi.txt](./scripts/README.kabi.txt) file.
+In order to know exactly what's changed, we'll need two builds of the
+kernel RPMs, one before the change (rebase, or patch addition to our
+patch-queue), and one after, with `KBUILD_SYMTYPES=y`, so that metadata
+about types are saved and we can use them to infer which commits introduced
+the kABI changes.
 
-### Build kernel RPMs from before the rebase
+## Build last release kernel RPM
 
 > [!NOTE]
 >
@@ -568,7 +594,7 @@ need to get dwarf information on types):
 cp -r /path/to/rpm/repo/BUILD/kernel-4.19.19 /tmp/
 ```
 
-### Repeat process for the rebased kernel
+## Repeat process for the changed kernel
 
 ```bash
 cd /path/to/rpm/repo/
@@ -598,15 +624,11 @@ cp -r /path/to/rpm/repo/BUILD/linux-4.19.325 /tmp/
 ```
 
 
-### Check if symbols we care about have been modified
+## List modified types
 
 ```bash
 ./scripts/kabi compare --no-print-symbol ./kernel-abis/Modules.kabi-4.19.19 ./kernel-abis/Modules.kabi-4.19.325
 ```
-
-If nothing shows up, no kABI breakage and you can open a PR with your
-changes and follow the usual release process.  If there were kABI breakage,
-follow chapter "Fixing kABI breakage" before opening your PR.
 
 Typical output will look like this:
 
@@ -643,9 +665,9 @@ Typical output will look like this:
 Each change will require either a kABI fix, if possible, or reverting the
 patch that introduced the change.
 
-### How to neutralize kABI changes
+## How to neutralize kABI changes
 
-#### Manually Identifiyng breaking commit
+### Manually Identifying breaking commit
 
 The fastest way is to first identify where the symbol definition is coming
 from, e.g. for `struct cxgbi_sock` above, we'd:
@@ -663,10 +685,10 @@ $ git log --oneline -G 'completion cmpl;'  --right-only ${prev_branch}..HEAD -- 
 ```
 
 The easiest way is obviously to revert the infringing commit, but some
-tricks might be possible to avoid this last resort measures, check next
+tricks might be possible to avoid this last resort measure, check next
 chapters to see if it's possible depending on the change.
 
-#### Using `kabi tui`
+### Using `kabi tui`
 
 ![kabi tui demo](imgs/demo.gif "kabi tui demo")
 
@@ -681,11 +703,21 @@ commits that introduced the kABI change:
 - `--locked-file`: Path to the `kabi.locked_list`
 - `OLD_MODULES.KABI NEW_MODULES_KABI`: Path to `Symtypes.build|Modules.kabi` files for the base (old) and rebased (new) version of symbol types
 
+Example run:
 
-#### Different types of kABI changes
+```bash
+kabi tui --repository ~/vates/repos/linux                       \
+         --rev-list v4.19.325..v4.19.325-cip129                 \
+	     --old-vmlinux ./kernel-abis/vmlinux-4.19.325.o         \
+		 --new-vmlinux ./kernel-abis/vmlinux-4.19.325-cip129.o  \
+		 --locked-file ./kernel-abis/xcpng-8.3-kabi_lockedlist  \
+		 ./kernel-abis/{Modules.kabi-4.19.325,Symtypes.build-4.19.325-cip129}
+```
 
-Before we dive in into the various ways to neutralize kABI changes, here's
-a handy git alias you can add to commit with information on what commit we
+### Different types of kABI changes
+
+Before we dive into the various ways to neutralize kABI changes, here's a
+handy git alias you can add to commit with information on what commit we
 are neutralizing the kabi for:
 
 ```config
@@ -694,12 +726,12 @@ are neutralizing the kabi for:
 	rkabi = "!f() { git commit -s -e -m \"!kabi Revert: $(git log --format=%s -1 $1)\n\n\nReverts: $(git log --format=\"%h (\\\"%s\\\")\" --no-decorate -1 $1)\"; }; f"
 ```
 
-##### Unknown to full definition
+#### Unknown to full definition
 
 > [!NOTE]
 > This chapter is in progress
 
-##### Struct field deletion
+#### Struct field deletion
 
 A field deletion is usually safe to ignore, so long as it doesn't change
 the offsets of subsequent fields.  If it does change offsets, it is fine to
@@ -764,13 +796,13 @@ index 55e695080fc6..24dc6c2f449e 100644
         struct hrtimer          period_timer;
 ```
 
-##### Struct field addition
+#### Struct field addition
 
-Struct field addition are usually the more complex to neutralize because
+Struct field additions are usually the more complex to neutralize because
 they tend to change offsets of all subsequent fields, unless you're lucky
 and they end up right on a hole (check the `pahole` view).
 
-###### If there are extra holes that can be used
+##### If there are extra holes that can be used
 
 Example with commit `53441f8e0185 ("PCI/ACPI: Fix runtime PM ref imbalance
 on Hot-Plug Capable ports")`
@@ -852,7 +884,7 @@ index b60e4ace3504..0c1afef354e9 100644
         atomic_t        enable_cnt;     /* pci_enable_device has been called */
 ```
 
-###### If there are no holes
+##### If there are no holes
 
 These are the most difficult kABI changes to neutralize as there is no room
 in the original struct to stuff the new field in.  First, let's take a
@@ -873,9 +905,9 @@ Example
 > This chapter is in progress
 
 
-##### Struct field type change
+#### Struct field type change
 
-###### No change in size of field
+##### No change in size of field
 
 Sometimes a const qualifier is added/removed, or the type changes without
 affecting the size of the field (for example `int` to `unsigned int`).  In
@@ -933,9 +965,9 @@ index bcd611d19f72..10cf82c96d71 100644
         };
 ```
 
-###### Changes in size that fit a hole
+##### Changes in size that fit a hole
 
-Sometimes a field gets expanded and "swallow" a neighbour hole. In those
+Sometimes a field gets expanded and "swallows" a neighbour hole. In those
 cases it should be fine to simply hide the change from `genksyms`.
 
 Example commit `aab312696d37 ("crypto: public_key: fix overflow during
@@ -1042,12 +1074,12 @@ index 052e26fda2e6..9c68984da215 100644
 ```
 
 
-###### Changes in size that do not fit a hole
+##### Changes in size that do not fit a hole
 
 > [!NOTE]
 > This chapter is in progress
 
-##### Struct field re-ordering
+#### Struct field re-ordering
 
 These are the easiest to neutralize as we should be able to re-order the
 fields back to where they were.  Example commit `aab312696d37 ("crypto:
@@ -1085,7 +1117,7 @@ The kABI fix simply puts the field back in place:
 ```
 
 
-##### Function prototype changes
+#### Function prototype changes
 
 > [!NOTE]
 > This chapter is in progress
