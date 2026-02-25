@@ -339,7 +339,6 @@ class CommitShowScreen(ModalScreen):
         body: HighlightedLog = self.vertical.query_one(HighlightedLog)
         if loaded:
             self.loading_indicator.display = False
-            #body.scroll_home(animate=False)
             body.display = True
             body.focus()
         else:
@@ -368,6 +367,18 @@ class CommitShowScreen(ModalScreen):
 
 class WorkerCalledProcessError(CalledProcessError):
     pass
+
+
+# @dataclass
+# class PaholeInfo:
+#     output: list[str]
+#     definition_file: str
+#     definition_line: str
+
+# class TypeInfo:
+#     def __init__(self):
+#         self.old_pahole_info: PaholeInfo | None = None
+#         self.new_pahole_info: PaholeInfo | None = None
 
 
 class KabiTuiApp(App):
@@ -421,12 +432,12 @@ class KabiTuiApp(App):
 
     def action_toggle_old_new(self) -> None:
         self.struct_version = "old" if self.struct_version == "new" else "new"
-        self.refresh_holes_view(self.symbol)
+        self.refresh_holes_view(self.type_name)
 
     def action_toggle_verbose(self) -> None:
         self.verbose_pahole = not self.verbose_pahole
-        self.pahole_worker = self.refresh_pahole_data(self.symbol)
-        self.refresh_holes_view(self.symbol)
+        self.pahole_worker = self.refresh_pahole_data(self.type_name)
+        self.refresh_holes_view(self.type_name)
 
     def compose(self) -> ComposeResult:
         self.startup_loading_indicator = LoadingIndicator()
@@ -484,8 +495,7 @@ class KabiTuiApp(App):
         self.body.display = False
         self.startup_loading_indicator.display = True
         self.changed_symbols_view.styles.width = "20%"
-
-        self.load_data()
+        self.load_kabi_data()
 
     def watch_loaded(self, loaded: bool) -> None:
         if loaded:
@@ -498,9 +508,9 @@ class KabiTuiApp(App):
             return "." + symbol
         return symbol
 
-    @work
-    async def load_data(self) -> None:
-        self.symbol = None
+    @work(thread=True)
+    async def load_kabi_data(self) -> None:
+        self.type_name = None
         self.old_symtypes = SymTypes.from_file(self.args.symtypes_lhs)
         self.new_symtypes = SymTypes.from_file(self.args.symtypes_rhs)
         self.common_symbols = (
@@ -537,14 +547,18 @@ class KabiTuiApp(App):
         self.loaded = True
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected):
-        changed_symbols_body: HighlightedTable = self.changed_symbols_view.query_one(HighlightedTable)
+        changed_symbols_body: HighlightedTable = (
+            self.changed_symbols_view.query_one(HighlightedTable)
+        )
         if event.data_table == changed_symbols_body:
-            if self.symbol == event.row_key.value:
+            if self.type_name == event.row_key.value:
                 return
-            self.symbol = event.row_key.value
+            self.type_name = event.row_key.value
             self.refresh_all()
             return
-        commits_table: HighlightedCommitsTable = self.guilty_commits_view.query_one(HighlightedCommitsTable)
+        commits_table: HighlightedCommitsTable = (
+            self.guilty_commits_view.query_one(HighlightedCommitsTable)
+        )
         if event.data_table == commits_table:
             self.display_commit(event.row_key.value, commits_table.get_row(event.row_key)[0])
 
@@ -553,12 +567,12 @@ class KabiTuiApp(App):
 
     @work(exclusive=True)
     async def refresh_all(self) -> None:
-        await self.refresh_symbol_data(self.symbol)
-        self.refresh_holes_view(self.symbol)
-        self.refresh_diff_view(self.symbol)
-        self.refresh_modules_view(self.symbol)
-        self.refresh_commits_view(self.symbol)
-        self.refresh_symbols_view(self.symbol)
+        await self.reload_type_info(self.type_name)
+        self.refresh_holes_view(self.type_name)
+        self.refresh_diff_view(self.type_name)
+        self.refresh_modules_view(self.type_name)
+        self.refresh_commits_view(self.type_name)
+        self.refresh_symbols_view(self.type_name)
 
     # /* <3d8c> ./include/linux/mutex.h:53 */
     include_header_re = re.compile(
@@ -613,45 +627,58 @@ class KabiTuiApp(App):
         self.type_header_file = header.group("header")
         self.type_line_number = header.group("line_number")
 
-    def get_header_title(self, symbol: str) -> Text:
-        symbol = self.old_symtypes.name(symbol)
-        header_title = Text("[")
+    def get_header_title(self, type_name: str) -> Text:
+        expanded_type_name = clear_background(
+            Syntax(
+                "",
+                lexer="c",
+                theme=self.theme,
+                background_color="default"
+            )
+            .highlight(
+                self.new_symtypes.name(type_name)
+                if self.struct_version == "new"
+                else self.old_symtypes.name(type_name)
+            )
+        )
+        expanded_type_name.rstrip()
+        header_title = Text("")
         header_title.append_text(
             Text(
-                f"{self.struct_version}",
+                f"[{self.struct_version}] ",
                 (
-                    SolarizedColors.Green
+                    self.theme_variables["success"]
                     if self.struct_version == "new"
-                    else SolarizedColors.Red
+                    else self.theme_variables["error"]
                 ),
             )
         )
-        header_title.append_text(Text(f"] {symbol} - "))
-        header_title.append_text(Text(self.type_header_file, SolarizedColors.Yellow))
-        header_title.append(":")
-        header_title.append_text(Text(self.type_line_number, SolarizedColors.Blue))
+        header_title.append_text(expanded_type_name)
+        header_title.append_text(Text(" - "))
+        header_title.append_text(Text(self.type_header_file, self.theme_variables["accent"]))
+        log(f"{header_title=} {self.new_symtypes.name(type_name)=}")
         return header_title
 
-    async def refresh_symbol_data(self, symbol: str) -> None:
-        def refresh_symbol_diff():
-            self.old_symbol_definition = self.old_symtypes.gen_short_decl(
-                self.symbol_versions[symbol][0][0]
+    def reload_type_diff(self, type_name: str):
+        self.old_symbol_definition = self.old_symtypes.gen_short_decl(
+            self.symbol_versions[type_name][0][0]
+        )
+        self.new_symbol_definition = self.new_symtypes.gen_short_decl(
+            self.symbol_versions[type_name][0][1]
+        )
+        self.symbol_diff = [
+            diff
+            for diff in difflib.unified_diff(
+                self.old_symbol_definition.splitlines(),
+                self.new_symbol_definition.splitlines(),
+                fromfile=self.old_symtypes.name(type_name),
+                tofile=self.new_symtypes.name(type_name),
+                lineterm="",
             )
-            self.new_symbol_definition = self.new_symtypes.gen_short_decl(
-                self.symbol_versions[symbol][0][1]
-            )
-            self.symbol_diff = [
-                diff
-                for diff in difflib.unified_diff(
-                    self.old_symbol_definition.splitlines(),
-                    self.new_symbol_definition.splitlines(),
-                    fromfile=self.old_symtypes.name(symbol),
-                    tofile=self.new_symtypes.name(symbol),
-                    lineterm="",
-                )
-            ]
+        ]
 
-        def refresh_pickaxe():
+    def reload_pickaxe_tokens(self, type_name: str):
+        if type_name.startswith("s#") or type_name.startswith("e#") or type_name.startswith("t#") or type_name.startswith("u#"):
             clexer = CLexer()
             tokens = []
             for line in self.symbol_diff:
@@ -667,61 +694,67 @@ class KabiTuiApp(App):
                     ]
                 )
             self.pickaxe_tokens = tokens
+        elif type_name.startswith("(") and type_name.endswith(")"):
+            self.pickaxe_tokens = [type_name[1:-1]]
+        else:
+            self.pickaxe_tokens = []
 
-        async def refresh_commits():
-            if not self.pickaxe_tokens:
-                self.commits = []
-            cmd = [
-                "git",
-                "-C",
-                self.args.repository,
-                "log",
-                "--oneline",
-                "--no-decorate",
-                "-G",
-                "(" + "|".join(self.pickaxe_tokens) + ")",
-                self.args.rev_list,
-                "--",
-                self.type_header_file,
-            ]
-            from textual import log
-            log(f"{cmd=}")
-            git_log = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    async def reload_commits(self):
+        if not self.pickaxe_tokens:
+            self.commits = []
+        cmd = [
+            "git",
+            "-C",
+            self.args.repository,
+            "log",
+            "--oneline",
+            "--no-decorate",
+            "-G",
+            "(" + "|".join(self.pickaxe_tokens) + ")",
+            self.args.rev_list,
+            "--",
+            self.type_header_file,
+        ]
+        git_log = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await git_log.communicate()
+        if git_log.returncode != 0 or stderr:
+            self.notify(
+                stderr.decode().strip(), title="git log error", severity="error"
             )
-            stdout, stderr = await git_log.communicate()
-            if git_log.returncode != 0 or stderr:
-                self.notify(
-                    stderr.decode().strip(), title="git log error", severity="error"
-                )
-                self.commits = []
-                return
-            self.commits = stdout.decode().splitlines()
+            self.commits = []
+            return
+        self.commits = stdout.decode().splitlines()
 
-        def refresh_modules():
-            modules = set()
-            for orig_symbol in self.rdep_symbol[symbol]:
-                for module in self.module_symbols[orig_symbol]:
-                    modules.add(module)
-            self.modules = modules
+    def reload_modules_data(self, type_name: str):
+        modules = set()
+        for orig_symbol in self.rdep_symbol[type_name]:
+            for module in self.module_symbols[orig_symbol]:
+                modules.add(module)
+        self.modules = modules
 
-        pahole_worker = self.refresh_pahole_data(symbol)
-        refresh_symbol_diff()
-        refresh_pickaxe()
-        refresh_modules()
+    async def reload_type_info(self, type_name: str) -> None:
+
+        # We run pahole for enums, structs, typedefs and unions
+        if (
+                type_name.startswith("e#")
+                or type_name.startswith("s#")
+                or type_name.startswith("t#")
+                or type_name.startswith("u#")
+        ):
+            pahole_worker = self.refresh_pahole_data(type_name)
+        else:
+            pahole_worker = self.run_worker(asyncio.sleep(0))
+        self.reload_type_diff(type_name)
+        self.reload_pickaxe_tokens(type_name)
+        self.reload_modules_data(type_name)
         try:
             await pahole_worker.wait()
-        except WorkerFailed as worker_error:
-            self.pahole_new_output = []
-            self.pahole_old_output = []
-            self.type_header_file = "unknown"
-            self.type_line_number = "0"
-            if isinstance(worker_error.error, WorkerCalledProcessError):
-                self.pahole_new_output = worker_error.error.stderr.splitlines()
-                self.pahole_old_output = worker_error.error.stderr.splitlines()
+        except WorkerFailed:
             self.commits = []
         else:
-            await refresh_commits()
+            await self.reload_commits()
 
     def refresh_diff_view(self, symbol: str) -> None:
         diff_body: HighlightedLog = self.symbol_diff_view.query_one(HighlightedLog)
@@ -740,7 +773,7 @@ class KabiTuiApp(App):
             HighlightedLog
         )
         symbols = set()
-        for rdep_symbol in self.rdep_symbol[self.symbol]:
+        for rdep_symbol in self.rdep_symbol[self.type_name]:
             symbols.add(
                 self.old_symtypes.gen_short_decl(
                     self.symbol_versions[rdep_symbol][0][0]

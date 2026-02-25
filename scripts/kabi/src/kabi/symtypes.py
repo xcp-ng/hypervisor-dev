@@ -8,7 +8,7 @@ from .utils import pretty
 
 class SymTypes:
     PREFIXES: dict[str, str] = {
-        "t": "",
+        "t": "typedef ",
         "E": "",
         "e": "enum ",
         "s": "struct ",
