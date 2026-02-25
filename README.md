@@ -37,6 +37,12 @@
   - [Update the RPM repo](#update-the-rpm-repo)
   - [Build the kernel RPMs](#build-the-kernel-rpms-1)
   - [Verify source RPM generates the same sources](#verify-source-rpm-generates-the-same-sources)
+- [Incorporating XenServer patch-queue changes](#incorporating-xenserver-patch-queue-changes)
+  - [Identify the changes](#identify-the-changes)
+  - [Newly added XS patches](#newly-added-xs-patches)
+  - [Removed XS patches](#removed-xs-patches)
+  - [Changed XS patches](#changed-xs-patches)
+  - [Build and verify](#build-and-verify)
 - [Handling kABI breakage](#handling-kabi-breakage)
   - [Build last release kernel RPM](#build-last-release-kernel-rpm)
   - [Repeat process for the changed kernel](#repeat-process-for-the-changed-kernel)
@@ -637,6 +643,38 @@ against our locked list.  If it reports breakage, follow
 
 Use `git diff <your-branch> <newly_imported_branch>` to verify there are
 zero diffs.
+
+# Incorporating XenServer patch-queue changes
+
+Our `SPECS/kernel.spec` contains two blocks of patches: XenServer's
+(numbered `Patch0` onwards) followed by ours (numbered `Patch1000`
+onwards).  When XenServer releases a new kernel SRPM, their patch-queue
+changes and we need to incorporate those changes into our branch.
+
+The following assumes the new XenServer SRPM is already imported as the
+`XS-8.3` branch in the SRPM repo.
+
+## Build and verify
+
+Once all changes are incorporated, build the RPMs:
+
+```bash
+cd /path/to/srpm/repo
+xcp-ng-dev container build 8.3 ./
+```
+
+If the build fails, refer to [Incorrect conflict
+resolution](#incorrect-conflict-resolution).
+
+Once built, `check-kabi` will verify the symbol exports and it should not
+fail at this step given XenServer folsk guarantee a stable kABI.
+
+Finally, verify the source RPM round-trips cleanly:
+
+```bash
+git commit -s -m "kernel: incorporate XS <xs-version> changes"
+/path/to/xcp/repo/scripts/git-import-srpm HEAD
+```
 
 # Handling kABI breakage
 
