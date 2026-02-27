@@ -1371,6 +1371,15 @@ diff --git a/net/sched/sch_mq.c b/net/sched/sch_mq.c
 index 0ab13a495af9..bc24bb782aa5 100644
 --- a/net/sched/sch_mq.c
 +++ b/net/sched/sch_mq.c
+@@ -130,7 +130,7 @@ static void mq_attach(struct Qdisc *sch)
+        priv->qdiscs = NULL;
+ }
+
+-static void mq_change_real_num_tx(struct Qdisc *sch, unsigned int new_real_tx)
++void mq_change_real_num_tx(struct Qdisc *sch, unsigned int new_real_tx)
+ {
+ #ifdef CONFIG_NET_SCHED
+        struct net_device *dev = qdisc_dev(sch);
 @@ -308,7 +308,12 @@ struct Qdisc_ops mq_qdisc_ops __read_mostly = {
  	.init		= mq_init,
  	.destroy	= mq_destroy,
@@ -1440,6 +1449,10 @@ index c0ab1e38e80c..7bd52f60422f 100644
 > use it in the net/sched/ core code because mqprio is not loaded at boot.
 > The dependency is really mqprio depending on net/sched core and not the
 > other way around.
+>
+> Note also that the visibity of `mq_change_real_num_tx` was also updated
+> to be non-static such that it can be referenced in the
+> `net/sched/sch_generic.c` code.
 
 #### Shadow live patching API
 
