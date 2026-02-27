@@ -8,6 +8,8 @@ from collections import defaultdict
 
 from enum import StrEnum
 
+from itertools import chain
+
 from pygments.lexer import RegexLexer, bygroups
 from pygments.lexers import CLexer
 from pygments.styles import get_style_by_name
@@ -22,7 +24,7 @@ from subprocess import CalledProcessError
 from textual import work, log
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, ScrollableContainer
 from textual.content import Content
 from textual.reactive import reactive
 from textual.screen import ModalScreen
@@ -84,8 +86,9 @@ def clear_background(t: Text) -> Text:
     return t
 
 
-class HighlightedLog(VerticalScroll):
+class HighlightedLog(ScrollableContainer):
     DEFAULT_CSS = """
+
     HighlightedLog:focus {
         background: $background-lighten-1
 }
@@ -436,7 +439,7 @@ class KabiTuiApp(App):
 
     def action_toggle_verbose(self) -> None:
         self.verbose_pahole = not self.verbose_pahole
-        self.pahole_worker = self.refresh_pahole_data(self.type_name)
+        self.pahole_worker = self.reload_pahole_data(self.type_name)
         self.refresh_holes_view(self.type_name)
 
     def compose(self) -> ComposeResult:
@@ -580,7 +583,12 @@ class KabiTuiApp(App):
     )
 
     @work(exclusive=True, thread=True, exit_on_error=False)
-    async def refresh_pahole_data(self, symbol):
+    async def reload_pahole_data(self, symbol):
+        def clear_pahole_data():
+            self.pahole_old_output = []
+            self.pahole_new_output = []
+            self.definition_file = "unknown"
+
         def check(pahole, outputs, vmlinux):
             if pahole.returncode != 0 or outputs[1]:
                 self.notify(
@@ -588,12 +596,23 @@ class KabiTuiApp(App):
                     title="pahole error",
                     severity="error",
                 )
+                clear_pahole_data()
                 raise WorkerCalledProcessError(
                     pahole.returncode,
                     cmd + [vmlinux],
                     output=outputs[0],
                     stderr=outputs[1]
                 )
+
+        # We run pahole for enums, structs, typedefs and unions
+        if not (
+                symbol.startswith("e#")
+                or symbol.startswith("s#")
+                or symbol.startswith("t#")
+                or symbol.startswith("u#")
+        ):
+            clear_pahole_data()
+            return
 
         cmd = ["pahole", "-I"]
         if not self.verbose_pahole:
@@ -622,10 +641,9 @@ class KabiTuiApp(App):
         check(pahole_new, pahole_new_outputs, self.args.new_vmlinux)
         self.pahole_old_output = pahole_old_outputs[0].decode().splitlines()
         self.pahole_new_output = pahole_new_outputs[0].decode().splitlines()
-        header = self.include_header_re.match(self.pahole_old_output[1])
-        assert header is not None
-        self.type_header_file = header.group("header")
-        self.type_line_number = header.group("line_number")
+        header_match = self.include_header_re.match(self.pahole_old_output[1])
+        assert header_match is not None
+        self.definition_file = header_match.group("header")
 
     def get_header_title(self, type_name: str) -> Text:
         expanded_type_name = clear_background(
@@ -655,7 +673,7 @@ class KabiTuiApp(App):
         )
         header_title.append_text(expanded_type_name)
         header_title.append_text(Text(" - "))
-        header_title.append_text(Text(self.type_header_file, self.theme_variables["accent"]))
+        header_title.append_text(Text(self.definition_file, self.theme_variables["accent"]))
         log(f"{header_title=} {self.new_symtypes.name(type_name)=}")
         return header_title
 
@@ -699,22 +717,67 @@ class KabiTuiApp(App):
         else:
             self.pickaxe_tokens = []
 
-    async def reload_commits(self):
-        if not self.pickaxe_tokens:
+    async def reload_commits(self, type_name: str):
+        def git_cmd_from_tokens():
+            if not self.pickaxe_tokens or self.definition_file == "unknown":
+                return None
+            cmd = [
+                "git",
+                "-C",
+                self.args.repository,
+                "log",
+                "--oneline",
+                "--no-decorate",
+                "-G",
+                "(" + "|".join(self.pickaxe_tokens) + ")",
+                self.args.rev_list,
+                "--",
+                self.definition_file,
+            ]
+            return cmd
+
+        def git_cmd_from_header_addition():
+            # We have a struct that was only forward declared that has
+            # become fully defined for some symbols.  So here we identify
+            # which files those symbols live in, and try to get the list of
+            # commits that added a header file to those same files.
+            #
+            # It may seem that we can use self.definition_file instead of
+            # matching with all "#include", but often the header file being
+            # included is not necessarily the one containing the definition
+            # of the symbol, but another header file including it.
+            #
+            # So make the choice to have more false positives here, rather
+            # than missing the guilty commits as a human should be able to
+            # tell easily if there are more than one match.
+            cmd = [
+                "git",
+                "-C",
+                self.args.repository,
+                "log",
+                "--oneline",
+                "--no-decorate",
+                "-G",
+                "#include",
+                self.args.rev_list,
+                "--",
+            ]
+            filenames = set()
+            for rdep_symbol in self.rdep_symbol[type_name]:
+                filenames.add(self.old_symtypes.exports[rdep_symbol].replace(".symtypes", ".c"))
+            cmd.extend(filenames)
+            log(f"{cmd=}")
+            return cmd
+
+        if "UNKNOWN" in self.old_symbol_definition or "UNKOWN" in self.new_symbol_definition:
+            cmd = git_cmd_from_header_addition()
+        else:
+            cmd = git_cmd_from_tokens()
+
+        if cmd is None:
             self.commits = []
-        cmd = [
-            "git",
-            "-C",
-            self.args.repository,
-            "log",
-            "--oneline",
-            "--no-decorate",
-            "-G",
-            "(" + "|".join(self.pickaxe_tokens) + ")",
-            self.args.rev_list,
-            "--",
-            self.type_header_file,
-        ]
+            return
+
         git_log = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
@@ -736,25 +799,18 @@ class KabiTuiApp(App):
 
     async def reload_type_info(self, type_name: str) -> None:
 
-        # We run pahole for enums, structs, typedefs and unions
-        if (
-                type_name.startswith("e#")
-                or type_name.startswith("s#")
-                or type_name.startswith("t#")
-                or type_name.startswith("u#")
-        ):
-            pahole_worker = self.refresh_pahole_data(type_name)
-        else:
-            pahole_worker = self.run_worker(asyncio.sleep(0))
+        pahole_worker = self.reload_pahole_data(type_name)
+
         self.reload_type_diff(type_name)
         self.reload_pickaxe_tokens(type_name)
         self.reload_modules_data(type_name)
+
         try:
             await pahole_worker.wait()
         except WorkerFailed:
-            self.commits = []
-        else:
-            await self.reload_commits()
+            pass
+
+        await self.reload_commits(type_name)
 
     def refresh_diff_view(self, symbol: str) -> None:
         diff_body: HighlightedLog = self.symbol_diff_view.query_one(HighlightedLog)
