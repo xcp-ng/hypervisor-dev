@@ -941,8 +941,88 @@ struct definition lives (path to the header file).
 
 ## Unknown to full definition
 
-> [!NOTE]
-> This chapter is in progress
+Sometimes a type definition hasn't really changed, but some compilation
+units which only had a forward declaration suddenly become aware of the
+full definition - this usually happens when a header file is added to a
+compilation unit.
+
+For example, commit `7c43f84efd6d ("driver core: Establish order of
+operations for device_add and device_del via bit…")` includes `linux/mm.h`
+in `fs/sysfs/file.c` which causes the following symbols to have a kABI
+change:
+- `sysfs_create_file_ns`
+- `sysfs_remove_bin_file`
+- `sysfs_remove_file_ns`
+
+This is caused by the `struct dev_pagemap` to become fully defined, this is
+presented as the following diff in `kabi tui`:
+
+```diff
+--- struct dev_pagemap
++++ struct dev_pagemap
+@@ -1,3 +1,12 @@
+ struct dev_pagemap {
+-   UNKNOWN
++   typedef dev_page_fault_t page_fault;
++   typedef dev_page_free_t page_free;
++   struct vmem_altmap altmap;
++   typedef bool altmap_valid;
++   struct resource res;
++   struct percpu_ref *ref;
++   void (*kill) (struct percpu_ref *);
++   struct device *dev;
++   void *data;
++   enum memory_type type;
+```
+
+A careful reader will have noticed that `struct dev_pagemap` is _not_
+defined inside `linux/mm.h`, but inside `include/linux/memremap.h`, but
+because `memremap.h` is included in `mm.h`, this causes kABI breakge.
+
+Most of the time, those kABI changes are easy to neutralize because we can
+simply hide the new header inclusion from `genksyms`, e.g.:
+
+```diff
+commit 2427dabb9445232d7ae0004846d45b66f0c3c628
+Author: Quentin Casasnovas <quentin.casasnovas@vates.tech>
+Date:   Fri Feb 27 14:04:01 2026 +0100
+
+    !kabi sysfs: Add sysfs_emit and sysfs_emit_at to format sysfs output
+
+    Made sure the `struct dev_pagemap` hasn't changed during the rebase from
+    v4.19.19 to v4.19.325-cip129 through pahole.
+
+    Fixes: cb1f69d53ac8 ("sysfs: Add sysfs_emit and sysfs_emit_at to format sysfs output")
+    Signed-off-by: Quentin Casasnovas <quentin.casasnovas@vates.tech>
+
+diff --git a/fs/sysfs/file.c b/fs/sysfs/file.c
+index e7c7d28c3fc6..a56520b67158 100644
+--- a/fs/sysfs/file.c
++++ b/fs/sysfs/file.c
+@@ -15,8 +15,14 @@
+ #include <linux/list.h>
+ #include <linux/mutex.h>
+ #include <linux/seq_file.h>
++#ifndef __GENKSYMS__
++/*
++ * Added in 7c43f84efd6d ("driver core: Establish order of operations for
++ * device_add and device_del via bitflag") and causes struct dev_pagemap to
++ * be fully defined, which changes the kABI of sysfs_* exported symbols.
++ */
+ #include <linux/mm.h>
+-
++#endif
+ #include "sysfs.h"
+ #include "../kernfs/kernfs-internal.h"
+
+```
+
+> [!WARNING]
+>
+> It is important to make sure that the type definition has _not_ changed
+> during you rebase, because the kABI change could be two folds (from
+> forward to fully declared _AND_ with some internal changes).
+
 
 ## Struct field deletion
 
