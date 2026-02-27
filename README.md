@@ -1523,12 +1523,12 @@ index c0ab1e38e80c..7bd52f60422f 100644
  module_init(mqprio_module_init);
 ```
 
-> [!NOTE]
+> [!WARNING]
 >
-> We can't simply export the symbols from mqprio and expect to be able to
-> use it in the net/sched/ core code because mqprio is not loaded at boot.
-> The dependency is really mqprio depending on net/sched core and not the
-> other way around.
+> We can't simply export the symbols from `mqprio` and expect to be able to
+> use it in the `net/sched/` core code because `mqprio` is not loaded at
+> boot.  The dependency is `mqprio` depending on `net/sched` core and not
+> the other way around.
 >
 > Note also that the visibity of `mq_change_real_num_tx` was also updated
 > to be non-static such that it can be referenced in the
