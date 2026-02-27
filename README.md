@@ -47,24 +47,23 @@
     - [Unified diff of type changes](#unified-diff-of-type-changes)
     - [Manually Identifying breaking commit](#manually-identifying-breaking-commit)
     - [Manually checking holes and padding bytes with pahole](#manually-checking-holes-and-padding-bytes-with-pahole)
-  - [Different types of kABI changes](#different-types-of-kabi-changes)
-    - [Unknown to full definition](#unknown-to-full-definition)
-    - [Struct field deletion](#struct-field-deletion)
-    - [Struct field addition](#struct-field-addition)
-      - [If there are extra holes that can be used](#if-there-are-extra-holes-that-can-be-used)
-      - [If there are available padding bytes](#if-there-are-available-padding-bytes)
-      - [If there are no holes](#if-there-are-no-holes)
-        - [Code change](#code-change)
-        - [Shadow live patching API](#shadow-live-patching-api)
-    - [Struct field type change](#struct-field-type-change)
-      - [No change in size of field](#no-change-in-size-of-field)
-      - [Changes in size that fit a hole](#changes-in-size-that-fit-a-hole)
-      - [Changes in size that do not fit a hole](#changes-in-size-that-do-not-fit-a-hole)
-    - [Struct field re-ordering](#struct-field-re-ordering)
-    - [Enum value added](#enum-value-added)
-      - [That doesn't change subsequent values](#that-doesnt-change-subsequent-values)
-      - [That does change subsequent values](#that-does-change-subsequent-values)
-    - [Function prototype changes](#function-prototype-changes)
+  - [Unknown to full definition](#unknown-to-full-definition)
+  - [Struct field deletion](#struct-field-deletion)
+  - [Struct field addition](#struct-field-addition)
+    - [If there are extra holes that can be used](#if-there-are-extra-holes-that-can-be-used)
+    - [If there are available padding bytes](#if-there-are-available-padding-bytes)
+    - [If there are no holes](#if-there-are-no-holes)
+      - [Code change](#code-change)
+      - [Shadow live patching API](#shadow-live-patching-api)
+  - [Struct field type change](#struct-field-type-change)
+    - [No change in size of field](#no-change-in-size-of-field)
+    - [Changes in size that fit a hole](#changes-in-size-that-fit-a-hole)
+    - [Changes in size that do not fit a hole](#changes-in-size-that-do-not-fit-a-hole)
+  - [Struct field re-ordering](#struct-field-re-ordering)
+  - [Enum value added](#enum-value-added)
+    - [That doesn't change subsequent values](#that-doesnt-change-subsequent-values)
+    - [That does change subsequent values](#that-does-change-subsequent-values)
+  - [Function prototype changes](#function-prototype-changes)
   - [Finalizing](#finalizing)
 
 <!-- markdown-toc end -->
@@ -769,13 +768,31 @@ Our current policy with regards to kABI changes is that it MUST not change
 any kABI required by binary modules we are shipping (otherwise, said
 modules need to be rebuilt, and a new install ISO generated).
 
-In order to know exactly what's changed, we'll need two builds of the
+Before we dive into the various ways to neutralize kABI changes, here are a
+handy git aliases you can add to commit with information on what commit we
+are neutralizing the kabi for:
+
+```config
+[alias]
+	kabi = "!f() { git commit -s -e -m \"!kabi $(git title $1)\n\n\nFixes: $(git log --format=\"%h (\\\"%s\\\")\" --no-decorate -1 $1)\"; }; f"
+	ol = "!f() { git log \"--format=%h (\\\"$(git title $1)\\\")\" --no-walk $1; }; f"
+	rkabi = "!f() { git revert --no-edit $1; git commit --amend -s -e -m \"!kabi Revert: $(git log --format=%s -1 $1)\n\n\nReverts: $(git log --format=\"%h (\\\"%s\\\")\" --no-decorate -1 $1)\"; }; f"
+	title = "!f() { git log --format=%s --no-walk $@ | awk '{ if (length($0) > 80) print substr($0, 1, 80) \"…\"; else print }' ; }; f"
+	xsel = "!f() { git ol $1 | tr -d '\n' | xsel --clipboard  --input; }; f"
+```
+
+You can then simply run `git kabi <guilty_commit_sha1>` to `git commit`
+with a templated commit description, or `git rkabi <guilty_commit_sha1>`
+for the same effect but actually reverting the commit introducing the kABI
+change.
+
+## Build before and after RPMs to get symtypes information
+
+Now, in order to know exactly what's changed, we'll need two builds of the
 kernel RPMs, one before the change (rebase, or patch addition to our
 patch-queue), and one after, with `KBUILD_SYMTYPES=y`, so that metadata
 about types are saved and we can use them to infer which commits introduced
 the kABI changes.
-
-## Build before and after RPMs to get symtypes information
 
 > [!NOTE]
 >
@@ -922,27 +939,12 @@ pahole -C <type_name> /path/to/vmlinux.o
 You can also add the `-I` flag so that `pahole` will tell you where the
 struct definition lives (path to the header file).
 
-## Different types of kABI changes
-
-Before we dive into the various ways to neutralize kABI changes, here's a
-handy git alias you can add to commit with information on what commit we
-are neutralizing the kabi for:
-
-```config
-[alias]
-	kabi = "!f() { git commit -s -e -m \"!kabi $(git title $1)\n\n\nFixes: $(git log --format=\"%h (\\\"%s\\\")\" --no-decorate -1 $1)\"; }; f"
-	ol = "!f() { git log \"--format=%h (\\\"$(git title $1)\\\")\" --no-walk $1; }; f"
-	rkabi = "!f() { git revert --no-edit $1; git commit --amend -s -e -m \"!kabi Revert: $(git log --format=%s -1 $1)\n\n\nReverts: $(git log --format=\"%h (\\\"%s\\\")\" --no-decorate -1 $1)\"; }; f"
-	title = "!f() { git log --format=%s --no-walk $@ | awk '{ if (length($0) > 80) print substr($0, 1, 80) \"…\"; else print }' ; }; f"
-	xsel = "!f() { git ol $1 | tr -d '\n' | xsel --clipboard  --input; }; f"
-```
-
-### Unknown to full definition
+## Unknown to full definition
 
 > [!NOTE]
 > This chapter is in progress
 
-### Struct field deletion
+## Struct field deletion
 
 A field deletion is usually safe to ignore, so long as it doesn't change
 the offsets of subsequent fields.  If it does change offsets, it is fine to
@@ -1007,13 +1009,13 @@ index 55e695080fc6..24dc6c2f449e 100644
         struct hrtimer          period_timer;
 ```
 
-### Struct field addition
+## Struct field addition
 
 Struct field additions are usually the more complex to neutralize because
 they tend to change offsets of all subsequent fields, unless you're lucky
 and they end up right on a hole (check the `pahole` view).
 
-#### If there are extra holes that can be used
+### If there are extra holes that can be used
 
 Example with commit `53441f8e0185 ("PCI/ACPI: Fix runtime PM ref imbalance
 on Hot-Plug Capable ports")`
@@ -1095,7 +1097,7 @@ index b60e4ace3504..0c1afef354e9 100644
         atomic_t        enable_cnt;     /* pci_enable_device has been called */
 ```
 
-#### If there are available padding bytes
+### If there are available padding bytes
 
 Example commit `f602ed9f8574 ("net: sched: extend Qdisc with rcu")`:
 
@@ -1232,7 +1234,7 @@ index 483303adf3df..78cc818d9916 100644
 
 ```
 
-#### If there are no holes
+### If there are no holes
 
 These are the most difficult kABI changes to neutralize as there is no room
 in the original struct to stuff the new field in.  First, let's take a
@@ -1264,7 +1266,7 @@ change or using the [shadow live patching
 API](https://docs.kernel.org/livepatch/shadow-vars.html).
 
 
-##### Code change
+#### Code change
 
 Sometimes, the data structure modifications are not strictly required in
 order to implement the change, in that case, we can modify the code to
@@ -1439,7 +1441,7 @@ index c0ab1e38e80c..7bd52f60422f 100644
 > The dependency is really mqprio depending on net/sched core and not the
 > other way around.
 
-##### Shadow live patching API
+#### Shadow live patching API
 
 Make sure you have read the
 [documentation](https://docs.kernel.org/livepatch/shadow-vars.html) and
@@ -1563,9 +1565,9 @@ index 67431d02ad9d..de9f52fc39ec 100644
 > when doing so, it requires a proper understanding of the lifetime of the
 > objects for which new fields are added separately.
 
-### Struct field type change
+## Struct field type change
 
-#### No change in size of field
+### No change in size of field
 
 Sometimes a const qualifier is added/removed, or the type changes without
 affecting the size of the field (for example `int` to `unsigned int`).  In
@@ -1623,7 +1625,7 @@ index bcd611d19f72..10cf82c96d71 100644
         };
 ```
 
-#### Changes in size that fit a hole
+### Changes in size that fit a hole
 
 Sometimes a field gets expanded and "swallows" a neighbour hole. In those
 cases it should be fine to simply hide the change from `genksyms`.
@@ -1779,7 +1781,7 @@ modified, and offsets of fields within the struct are iso.
 > and the fact no driver was reading this field from a code audit, it was
 > deemed safe to fix this way.
 
-#### Changes in size that do not fit a hole
+### Changes in size that do not fit a hole
 
 You can refer to the [chapter on struct field addition without
 holes](#if-there-are-no-holes) here, with the extra work of making sure the
@@ -1787,7 +1789,7 @@ old field cannot be referenced (so leaving the old definition in for
 `genksyms`, but renaming the field otherwise so we get build errors if it's
 ever referenced in the kernel or binary drivers).
 
-### Struct field re-ordering
+## Struct field re-ordering
 
 These are the easiest to neutralize as we should be able to re-order the
 fields back to where they were.  Example commit `aab312696d37 ("crypto:
@@ -1824,9 +1826,9 @@ The kABI fix simply puts the field back in place:
         u8 digest_size;         /* Number of bytes in digest */
 ```
 
-### Enum value added
+## Enum value added
 
-#### That doesn't change subsequent values
+### That doesn't change subsequent values
 
 This happens when new values are added at the very end of an enum, or where
 subsequent fields are all set to a specific value, for example in
@@ -1880,7 +1882,7 @@ index 0c1afef354e9..1b9ae87520c0 100644
 
 ```
 
-#### That does change subsequent values
+### That does change subsequent values
 
 This one is more complicated and really depends if we can somehow re-order
 the newly added enum values without interfering with other values.
@@ -1929,7 +1931,7 @@ struct cgroup_bpf {
 Here, our driver would disagree on the `sizeof(struct cgroup_bpf)` and bad
 things would happen if we were to simply hide the fields from `genksyms`.
 
-### Function prototype changes
+## Function prototype changes
 
 > [!NOTE]
 > This chapter is in progress
