@@ -80,6 +80,9 @@ update to the Linux kernel.
 
 ## Branch convention
 
+![Branching strategy](imgs/branch_strategy.png "Branching strategy")
+
+
 We currently use a branch convention in the source code repositories
 maintained by the Hypervisor & Kernel team at vates, where for each
 released package (qemu, xen, linux), a corresponding source branch is
