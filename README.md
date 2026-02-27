@@ -3,16 +3,16 @@
 
 - [Introduction](#introduction)
   - [Branch convention](#branch-convention)
-  - [Pre-requisites](#pre-requisites)
-    - [Get a working build environment](#get-a-working-build-environment)
+- [Pre-requisites](#pre-requisites)
+  - [Get a working build environment](#get-a-working-build-environment)
+  - [Install the kabi tool](#install-the-kabi-tool)
 - [Adding a new binary kernel module](#adding-a-new-binary-kernel-module)
   - [Pull and get all sub-modules](#pull-and-get-all-sub-modules)
   - [Add the new RPM repo as sub-module](#add-the-new-rpm-repo-as-sub-module)
   - [Refreshing the kabi.locked_list file](#refreshing-the-kabilocked_list-file)
 - [Upgrading kernel to latest upstream](#upgrading-kernel-to-latest-upstream)
-  - [Pre-requisites](#pre-requisites-1)
-    - [Git repositories](#git-repositories)
-    - [Dev tooling](#dev-tooling)
+  - [Pre-requisites git repositories](#pre-requisites-git-repositories)
+  - [Pre-requisites dev tooling](#pre-requisites-dev-tooling)
   - [Rebase the kernel to latest upstream](#rebase-the-kernel-to-latest-upstream)
     - [Check if the patch being applied was not already in your new onto branch:](#check-if-the-patch-being-applied-was-not-already-in-your-new-onto-branch)
       - [If yes](#if-yes)
@@ -20,14 +20,14 @@
     - [Create a branch from the rebased HEAD](#create-a-branch-from-the-rebased-head)
   - [Update the origin tarball](#update-the-origin-tarball)
     - [Download](#download)
-    - [Verify the signature of your tarball:](#verify-the-signature-of-your-tarball)
+    - [Verify the signature of your tarball](#verify-the-signature-of-your-tarball)
     - [Commit](#commit)
   - [Build the kernel RPMs](#build-the-kernel-rpms)
     - [Builds failures](#builds-failures)
       - [Incorrect conflict resolution](#incorrect-conflict-resolution)
       - [Kernel .config check fails](#kernel-config-check-fails)
       - [kABI breaking changes](#kabi-breaking-changes)
-  - [Verify source RPM generate the same sources](#verify-source-rpm-generate-the-same-sources)
+  - [Verify source RPM generates the same sources](#verify-source-rpm-generates-the-same-sources)
   - [Review your rebase](#review-your-rebase)
     - [Dropped commits on the rebase have a reason](#dropped-commits-on-the-rebase-have-a-reason)
     - [Patch-ids changes have a reason documented](#patch-ids-changes-have-a-reason-documented)
@@ -36,35 +36,35 @@
   - [Cherry-pick the commit](#cherry-pick-the-commit)
   - [Update the RPM repo](#update-the-rpm-repo)
   - [Build the kernel RPMs](#build-the-kernel-rpms-1)
-  - [Verify source RPM generates the same sources](#verify-source-rpm-generates-the-same-sources)
+  - [Verify source RPM generates the same sources](#verify-source-rpm-generates-the-same-sources-1)
 - [Incorporating XenServer patch-queue changes](#incorporating-xenserver-patch-queue-changes)
-  - [Merging changes back in.](#merging-changes-back-in)
+  - [Merging changes back in](#merging-changes-back-in)
   - [Build and verify](#build-and-verify)
 - [Handling kABI breakage](#handling-kabi-breakage)
-  - [Build last release kernel RPM](#build-last-release-kernel-rpm)
-  - [Repeat process for the changed kernel](#repeat-process-for-the-changed-kernel)
-  - [List modified types](#list-modified-types)
-  - [How to neutralize kABI changes](#how-to-neutralize-kabi-changes)
+  - [Build before and after RPMs to get symtypes information](#build-before-and-after-rpms-to-get-symtypes-information)
+  - [Using `kabi tui` to see all kABI changes](#using-kabi-tui-to-see-all-kabi-changes)
+  - [Manually checking modified types](#manually-checking-modified-types)
+    - [Unified diff of type changes](#unified-diff-of-type-changes)
     - [Manually Identifying breaking commit](#manually-identifying-breaking-commit)
-    - [Using `kabi tui`](#using-kabi-tui)
-    - [Different types of kABI changes](#different-types-of-kabi-changes)
-      - [Unknown to full definition](#unknown-to-full-definition)
-      - [Struct field deletion](#struct-field-deletion)
-      - [Struct field addition](#struct-field-addition)
-        - [If there are extra holes that can be used](#if-there-are-extra-holes-that-can-be-used)
-        - [If there are available padding bytes](#if-there-are-available-padding-bytes)
-        - [If there are no holes](#if-there-are-no-holes)
-          - [Code change](#code-change)
-          - [Shadow live patching API](#shadow-live-patching-api)
-      - [Struct field type change](#struct-field-type-change)
-        - [No change in size of field](#no-change-in-size-of-field)
-        - [Changes in size that fit a hole](#changes-in-size-that-fit-a-hole)
-        - [Changes in size that do not fit a hole](#changes-in-size-that-do-not-fit-a-hole)
-      - [Struct field re-ordering](#struct-field-re-ordering)
-      - [Enum value added](#enum-value-added)
-        - [That doesn't change subsequent values](#that-doesnt-change-subsequent-values)
-        - [That does change subsequent values](#that-does-change-subsequent-values)
-      - [Function prototype changes](#function-prototype-changes)
+    - [Manually checking holes and padding bytes with pahole](#manually-checking-holes-and-padding-bytes-with-pahole)
+  - [Different types of kABI changes](#different-types-of-kabi-changes)
+    - [Unknown to full definition](#unknown-to-full-definition)
+    - [Struct field deletion](#struct-field-deletion)
+    - [Struct field addition](#struct-field-addition)
+      - [If there are extra holes that can be used](#if-there-are-extra-holes-that-can-be-used)
+      - [If there are available padding bytes](#if-there-are-available-padding-bytes)
+      - [If there are no holes](#if-there-are-no-holes)
+        - [Code change](#code-change)
+        - [Shadow live patching API](#shadow-live-patching-api)
+    - [Struct field type change](#struct-field-type-change)
+      - [No change in size of field](#no-change-in-size-of-field)
+      - [Changes in size that fit a hole](#changes-in-size-that-fit-a-hole)
+      - [Changes in size that do not fit a hole](#changes-in-size-that-do-not-fit-a-hole)
+    - [Struct field re-ordering](#struct-field-re-ordering)
+    - [Enum value added](#enum-value-added)
+      - [That doesn't change subsequent values](#that-doesnt-change-subsequent-values)
+      - [That does change subsequent values](#that-does-change-subsequent-values)
+    - [Function prototype changes](#function-prototype-changes)
   - [Finalizing](#finalizing)
 
 <!-- markdown-toc end -->
@@ -97,9 +97,9 @@ the upstream point where the patch-queue of our SRPM was applied onto.  As
 such, our patch-queue can be found with the range `/pre-base../base`.
 
 
-## Pre-requisites
+# Pre-requisites
 
-### Get a working build environment
+## Get a working build environment
 
 ```bash
 git clone git@github.com:xcp-ng/xcp-ng-build-env.git
@@ -109,7 +109,15 @@ cd xcp-ng-build-env
 ./container/build.sh 8.3
 
 # Install the xcp-ng-dev CLI
-pip install -e ./
+uv tool install --editable .
+```
+## Install the kabi tool
+
+The script lives in this repository, to install:
+
+```bash
+cd scripts/kabi
+pip install -e .
 ```
 
 # Adding a new binary kernel module
@@ -152,7 +160,7 @@ script does just that:
 git add ./kernel-abis/xcpng-8.3-kabi_lockedlist
 
 # Refresh the types of information of locked symbols
-./scripts/kabi consolidate --kabi ./kernel-abis/xcpng-8.3-kabi_lockedlist --input ./kernel-abis/Symtypes.build-4.19.19 --output ./kernel-abis/Modules.kabi-4.19.19
+kabi consolidate --kabi ./kernel-abis/xcpng-8.3-kabi_lockedlist --input ./kernel-abis/Symtypes.build-4.19.19 --output ./kernel-abis/Modules.kabi-4.19.19
 git add kernel-abis/Modules.kabi-4.19.19
 
 git commit -s -m "kernel-abis: refreshed the list of locked symbols due to <driver_name> addition."
@@ -160,9 +168,7 @@ git commit -s -m "kernel-abis: refreshed the list of locked symbols due to <driv
 
 # Upgrading kernel to latest upstream
 
-## Pre-requisites
-
-### Git repositories
+## Pre-requisites git repositories
 
 You will need two different repositories, one containing the source code,
 and one containing the src RPM content that we will update as we are
@@ -171,7 +177,7 @@ rebasing the source code branches:
 - [linux source repository](https://github.com/xcp-ng/linux)
 - [source RPM repository](https://github.com/xcp-ng-rpms/kernel)
 
-### Dev tooling
+## Pre-requisites dev tooling
 
 We'll need two different tools present in a separate repository,
 `git-review-rebase` and `git-import-srpm`, let's make sure we have both
@@ -198,7 +204,6 @@ e.g. `kernel/xcpng-4.19.19-8.0.44.1/base`, we'll use it as the source of
 the rebased commits:
 
 ```bash
-
 cd /path/to/source/repo
 
 # Last released branch
@@ -207,6 +212,10 @@ prev_branch=$(git branch -r --list origin/kernel/xcpng\*/base | sort -V | tail -
 # Extra ^0 suffix to reference the commit and make sure original branch isn't updated
 git rebase ${prev_branch%/base}/pre-base ${prev_branch}^0 --onto v4.19.325
 ```
+
+> [!NOTE]
+>
+> Replace `v4.19.325` with the upstream tag you are rebasing onto
 
 As you are rebasing, you will get conflicts.  For each conflict:
 
@@ -271,7 +280,6 @@ cp 0001-xen-blkback-fix.patch /path/to/rpm/repo/SOURCES/0001-xen-blkback-fix-reb
                                                                              ^^^^^^^^^^^^^^^^^^^
 ```
 
-
 Then update the `PatchXXXX 0001-xen-blkback-fix.patch` line in the
 `SPECS/kernel.spec` file, e.g.:
 
@@ -297,7 +305,7 @@ Once your initial rebase is done, create a branch from your HEAD commit:
 
 ```bash
 cd /path/to/source/repo
-git checkout -B <your-name>-rebase-to-4.19.325
+git checkout -B <your-name>-rebase-to-<upstream_tag>
 ```
 
 ## Update the origin tarball
@@ -306,12 +314,12 @@ git checkout -B <your-name>-rebase-to-4.19.325
 
 Because the starting point of the patch-queue is different, you'll need to
 download a tarball matching the onto point you've used, as well as its
-signature file:
+signature file, e.g.:
 
 - [linux-4.19.325.tar.gz](https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.19.325.tar.gz)
 - [linux-4.19.325.tar.sign](https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.19.325.tar.sign)
 
-### Verify the signature of your tarball:
+### Verify the signature of your tarball
 
 ```bash
 gunzip --keep linux-4.19.325.tar.gz
@@ -326,6 +334,18 @@ gpg --locate-keys torvalds@kernel.org gregkh@kernel.org
 
 Double check the key signatures you've imported with [kernel.org
 signatures](https://www.kernel.org/category/signatures.html)
+
+For Ulrich Hecht, you can find his public key through the [Linux foundation
+CIP
+Wiki](https://wiki.linuxfoundation.org/civilinfrastructureplatform/cipkernelmaintenance),
+current link as of February 2026 is
+[here](https://git.kernel.org/pub/scm/docs/kernel/pgpkeys.git/plain/keys/36A3BADB36B27332.asc).
+
+You can download it locally and then import it into your `gpg` keyring:
+
+```bash
+gpg --import < ~/Downloads/36A3BADB36B27332.asc
+```
 
 ### Commit
 
@@ -470,11 +490,11 @@ build the RPM.
 
 Once the kernel is built, the `check-kabi` script will compare the
 `Modules.symvers` file with the `Module.kabi` file included in the source
-and will fail if any symbols were changed.  You can follow the chapter [How
-to neutralize kABI changes](#how-to-neutralize-kabi-changes) to neutralize
-those changes.
+and will fail if any symbols were changed.  You can follow the chapter
+[Handling kABI breakage](#handling-kabi-breakage) to neutralize those
+changes.
 
-## Verify source RPM generate the same sources
+## Verify source RPM generates the same sources
 
 Once your rebase is done and your RPM builds just fine, it is important to
 verify that your src RPM will generate the same sources.
@@ -534,7 +554,7 @@ the conflict) MUST be present in the commit description to facilitate
 reviews and document the problems.
 
 The reviewer will be able to "replay" the rebase of the particular commit
-using `git-rebase-review` to compare their resolution with yours.
+using `git-review-rebase` to compare their resolution with yours.
 
 Don't hesitate to use the blame output in the `git-review-rebase` command
 to find upstream commits causing the conflicts.
@@ -656,7 +676,61 @@ changes and we need to incorporate those changes into our branch.
 The following assumes the new XenServer SRPM is already imported as the
 `XS-8.3` branch in the SRPM repo.
 
-## Merging changes back in.
+## Merging changes back in
+
+```bash
+cd /path/to/source/rpm/repo
+git merge origin/master
+```
+
+If you're lucky, XenServer folks added new patches on top of their current
+patch-queue, such that the numbering for all the existing patches remain
+unchanged.  In this case, the merge should be pretty straightforwards and
+without much difficult conflicts.
+
+OTOH, if they've added new patches in the middle of the workqueue, that's
+where things get a little trickier as you will get pretty disgusting
+conflicts.  The easiest way I found to deal with this is to first resolve
+all conflicts that are not related to the Patch lines, then make sure to
+discard any conflicts in those Patch lines and keeping as they were, then
+manually squeezing in the changes, first identifying what patches were
+added with something like:
+
+``` bash
+cd /path/to/source/rpm/repo/
+git diff origin/XS-8.3^- --word-diff --word-diff-regex='[^[:space:]]|Patch[0-9]+:' -- SPECS \
+	| grep '^{+Patch.*+}$' \
+	| sed -e 's/+}$//' -e 's/^{//'
+```
+
+Which should give you all newly added patches, then copy it manually to the
+`SPECS/kernel.spec` file and then update all the Patch numbers with the
+[change_spec_patch_offset.sh](./scripts/change_spec_patch_offset.h) script,
+for example, if the above `git diff` command gives you:
+
+``` diff
++Patch444: 0002-SUNRPC-Remove-the-bh-safe-lock-requirement-on-xprt-t.patch
++Patch445: 0003-SUNRPC-Replace-direct-task-wakeups-from-softirq-cont.patch
++Patch446: 0004-SUNRPC-Replace-the-queue-timer-with-a-delayed-work-f.patch
++Patch447: 0001-nbd-fix-possible-sysfs-duplicate-warning.patch
++Patch448: 0001-nbd-protect-cmd-status-with-cmd-lock.patch
++Patch449: 0001-nbd-handle-racing-with-error-ed-out-commands.patch
++Patch450: 0001-nbd-fix-a-block_device-refcount-leak-in-nbd_release.patch
++Patch451: 0001-nbd-Aovid-double-completion-of-a-request.patch
++Patch452: 0001-nbd-don-t-handle-response-without-a-corresponding-re.patch
++Patch453: 0001-nbd-make-sure-request-completion-won-t-concurrent.patch
+```
+
+That's **10** extra patches, starting at Patch444, so you'd run:
+
+``` bash
+./scripts/change_spec_patch_offset.sh /path/to/source/rpm/repo/SPECS/kernel.spec 444 10
+```
+
+The script should be smart enough to fix all indexes for you as well as
+ignore patch indexes that are specific to XCP-ng.
+
+You can then git add and git commit.
 
 ## Build and verify
 
@@ -671,7 +745,7 @@ If the build fails, refer to [Incorrect conflict
 resolution](#incorrect-conflict-resolution).
 
 Once built, `check-kabi` will verify the symbol exports and it should not
-fail at this step given XenServer folsk guarantee a stable kABI.
+fail at this step given XenServer folks guarantee a stable kABI.
 
 Finally, verify the source RPM round-trips cleanly:
 
@@ -684,8 +758,8 @@ git commit -s -m "kernel: incorporate XS <xs-version> changes"
 
 > [!NOTE]
 >
-> [README.kabi.txt](scripts/README.kabi.txt) contains an introduction on
-> genksyms and the kabi tool - if you are not familiar with those you
+> [README.txt](scripts/kabi/README.txt) contains an introduction
+> on genksyms and the kabi tool - if you are not familiar with those you
 > should start there.
 >
 > This high-level diagram shows the different files involved in the process:
@@ -701,7 +775,7 @@ patch-queue), and one after, with `KBUILD_SYMTYPES=y`, so that metadata
 about types are saved and we can use them to infer which commits introduced
 the kABI changes.
 
-## Build last release kernel RPM
+## Build before and after RPMs to get symtypes information
 
 > [!NOTE]
 >
@@ -725,7 +799,7 @@ xcp-ng-dev container build 8.3 ./
 Collect all the types information with:
 
 ```bash
-./scripts/kabi collect /path/to/rpm/repo/BUILD/kernel-4.19.19 --output ./kernel-abis/Symtypes.build-4.19.19
+kabi collect /path/to/rpm/repo/BUILD/kernel-4.19.19 --output ./kernel-abis/Symtypes.build-4.19.19
 
 ```
 
@@ -736,40 +810,47 @@ need to get dwarf information on types):
 cp -r /path/to/rpm/repo/BUILD/kernel-4.19.19 /tmp/
 ```
 
-## Repeat process for the changed kernel
+Repeat the whole process for the rebased branch.
+
+## Using `kabi tui` to see all kABI changes
+
+![kabi tui demo](imgs/demo.gif "kabi tui demo")
+
+The `kabi tui` is an interactive frontend that helps in identifying kABI
+changes.  It needs a few inputs in order to present information on changed
+types, pahole outputs (useful to find information about holes and padding),
+commits that introduced the kABI change:
+
+- `--repository`: Path to the linux repository, e.g. `--repository ~/repos/linux`
+- `--rev-list`: Git range before/after rebase, e.g. `--rev-list v4.19.19..v4.19.325-cip129`
+- `--old-vmlinux/--new-vmlinux`: Path to an unstripped vmlinux.o file, e.g. `--old-vmlinux vmlinux-4.19.19.o`
+- `--locked-file`: Path to the `kabi.locked_list`
+- `OLD_MODULES.KABI NEW_MODULES_KABI`: Path to `Symtypes.build|Modules.kabi` files for the base (old) and rebased (new) version of symbol types
+
+Example run:
 
 ```bash
-cd /path/to/rpm/repo/
-
-git checkout rebased_branch
-sed -i 's/^%build$/%build\nexport KBUILD_SYMTYPES=y\n/' SPECS/kernel.spec
-xcp-ng-dev container build 8.3 ./
+kabi tui --repository ~/vates/repos/linux                       \
+         --rev-list v4.19.325..v4.19.325-cip129                 \
+	     --old-vmlinux ./kernel-abis/vmlinux-4.19.325.o         \
+		 --new-vmlinux ./kernel-abis/vmlinux-4.19.325-cip129.o  \
+		 --locked-file ./kernel-abis/xcpng-8.3-kabi_lockedlist  \
+		 ./kernel-abis/{Modules.kabi-4.19.325,Symtypes.build-4.19.325-cip129}
 ```
 
-Collect all the types information:
+## Manually checking modified types
+
+This chapter describes how to manually check the type changes and identify
+guilty commits.  Generally, the `kabi tui` frontend is better suited for
+this work as it will automate most of those steps, but this is given for
+reference.
+
+### Unified diff of type changes
+
+This uses the `kabi` tool to get a text output of all the changed types
 
 ```bash
-./scripts/kabi collect /path/to/rpm/repo/BUILD/linux-4.19.325 --output ./kernel-abis/Symtypes.build-4.19.325
-```
-
-Minimize the Symtypes file to only include symbols that are used by binary
-drivers we are shipping.
-
-```bash
-./scripts/kabi consolidate --kabi ./kernel-abis/xcpng-8.3-kabi_lockedlist --input ./kernel-abis/Symtypes.build-4.19.325 --output ./kernel-abis/Modules.kabi-4.19.325
-```
-
-Save the build directory for later use with `pahole`:
-
-```bash
-cp -r /path/to/rpm/repo/BUILD/linux-4.19.325 /tmp/
-```
-
-
-## List modified types
-
-```bash
-./scripts/kabi compare --no-print-symbol ./kernel-abis/Modules.kabi-4.19.19 ./kernel-abis/Modules.kabi-4.19.325
+kabi compare --no-print-symbol ./kernel-abis/Modules.kabi-4.19.19 ./kernel-abis/Modules.kabi-4.19.325
 ```
 
 Typical output will look like this:
@@ -807,15 +888,14 @@ Typical output will look like this:
 Each change will require either a kABI fix, if possible, or reverting the
 patch that introduced the change.
 
-## How to neutralize kABI changes
-
 ### Manually Identifying breaking commit
 
 The fastest way is to first identify where the symbol definition is coming
 from, e.g. for `struct cxgbi_sock` above, we'd:
 
 ```bash
-$ git grep -l 'struct cxgbi_sock {'
+cd /path/to/source/repo/
+git grep -l 'struct cxgbi_sock {'
 drivers/scsi/cxgbi/libcxgbi.h
 ```
 
@@ -830,33 +910,19 @@ The easiest way is obviously to revert the infringing commit, but some
 tricks might be possible to avoid this last resort measure, check next
 chapters to see if it's possible depending on the change.
 
-### Using `kabi tui`
+### Manually checking holes and padding bytes with pahole
 
-![kabi tui demo](imgs/demo.gif "kabi tui demo")
-
-The `kabi tui` is an interactive frontend that helps in neutralizing kABI
-changes.  It needs a few inputs in order to present information on changed
-types, pahole outputs (useful to find information about holes and padding),
-commits that introduced the kABI change:
-
-- `--repository`: Path to the linux repository, e.g. `--repository ~/repos/linux`
-- `--rev-list`: Git range before/after rebase, e.g. `--rev-list v4.19.19..v4.19.325-cip129`
-- `--old-vmlinux/--new-vmlinux`: Path to an unstripped vmlinux.o file, e.g. `--old-vmlinux vmlinux-4.19.19.o`
-- `--locked-file`: Path to the `kabi.locked_list`
-- `OLD_MODULES.KABI NEW_MODULES_KABI`: Path to `Symtypes.build|Modules.kabi` files for the base (old) and rebased (new) version of symbol types
-
-Example run:
+`man pahole` is your friend here, but the gist of it is that you can run
+the following command to see how the struct are laid out in memory:
 
 ```bash
-kabi tui --repository ~/vates/repos/linux                       \
-         --rev-list v4.19.325..v4.19.325-cip129                 \
-	     --old-vmlinux ./kernel-abis/vmlinux-4.19.325.o         \
-		 --new-vmlinux ./kernel-abis/vmlinux-4.19.325-cip129.o  \
-		 --locked-file ./kernel-abis/xcpng-8.3-kabi_lockedlist  \
-		 ./kernel-abis/{Modules.kabi-4.19.325,Symtypes.build-4.19.325-cip129}
+pahole -C <type_name> /path/to/vmlinux.o
 ```
 
-### Different types of kABI changes
+You can also add the `-I` flag so that `pahole` will tell you where the
+struct definition lives (path to the header file).
+
+## Different types of kABI changes
 
 Before we dive into the various ways to neutralize kABI changes, here's a
 handy git alias you can add to commit with information on what commit we
@@ -871,12 +937,12 @@ are neutralizing the kabi for:
 	xsel = "!f() { git ol $1 | tr -d '\n' | xsel --clipboard  --input; }; f"
 ```
 
-#### Unknown to full definition
+### Unknown to full definition
 
 > [!NOTE]
 > This chapter is in progress
 
-#### Struct field deletion
+### Struct field deletion
 
 A field deletion is usually safe to ignore, so long as it doesn't change
 the offsets of subsequent fields.  If it does change offsets, it is fine to
@@ -941,13 +1007,13 @@ index 55e695080fc6..24dc6c2f449e 100644
         struct hrtimer          period_timer;
 ```
 
-#### Struct field addition
+### Struct field addition
 
 Struct field additions are usually the more complex to neutralize because
 they tend to change offsets of all subsequent fields, unless you're lucky
 and they end up right on a hole (check the `pahole` view).
 
-##### If there are extra holes that can be used
+#### If there are extra holes that can be used
 
 Example with commit `53441f8e0185 ("PCI/ACPI: Fix runtime PM ref imbalance
 on Hot-Plug Capable ports")`
@@ -1029,7 +1095,7 @@ index b60e4ace3504..0c1afef354e9 100644
         atomic_t        enable_cnt;     /* pci_enable_device has been called */
 ```
 
-##### If there are available padding bytes
+#### If there are available padding bytes
 
 Example commit `f602ed9f8574 ("net: sched: extend Qdisc with rcu")`:
 
@@ -1166,7 +1232,7 @@ index 483303adf3df..78cc818d9916 100644
 
 ```
 
-##### If there are no holes
+#### If there are no holes
 
 These are the most difficult kABI changes to neutralize as there is no room
 in the original struct to stuff the new field in.  First, let's take a
@@ -1198,7 +1264,7 @@ change or using the [shadow live patching
 API](https://docs.kernel.org/livepatch/shadow-vars.html).
 
 
-###### Code change
+##### Code change
 
 Sometimes, the data structure modifications are not strictly required in
 order to implement the change, in that case, we can modify the code to
@@ -1373,7 +1439,7 @@ index c0ab1e38e80c..7bd52f60422f 100644
 > The dependency is really mqprio depending on net/sched core and not the
 > other way around.
 
-###### Shadow live patching API
+##### Shadow live patching API
 
 Make sure you have read the
 [documentation](https://docs.kernel.org/livepatch/shadow-vars.html) and
@@ -1491,15 +1557,15 @@ index 67431d02ad9d..de9f52fc39ec 100644
  EXPORT_SYMBOL_GPL(bdi_dev_name);
 ```
 
-> [!!NOTE]
+> [!NOTE]
 >
 > Using the shadow live patching code should really be last resort, and
 > when doing so, it requires a proper understanding of the lifetime of the
 > objects for which new fields are added separately.
 
-#### Struct field type change
+### Struct field type change
 
-##### No change in size of field
+#### No change in size of field
 
 Sometimes a const qualifier is added/removed, or the type changes without
 affecting the size of the field (for example `int` to `unsigned int`).  In
@@ -1557,7 +1623,7 @@ index bcd611d19f72..10cf82c96d71 100644
         };
 ```
 
-##### Changes in size that fit a hole
+#### Changes in size that fit a hole
 
 Sometimes a field gets expanded and "swallows" a neighbour hole. In those
 cases it should be fine to simply hide the change from `genksyms`.
@@ -1713,12 +1779,15 @@ modified, and offsets of fields within the struct are iso.
 > and the fact no driver was reading this field from a code audit, it was
 > deemed safe to fix this way.
 
-##### Changes in size that do not fit a hole
+#### Changes in size that do not fit a hole
 
-> [!NOTE]
-> This chapter is in progress
+You can refer to the [chapter on struct field addition without
+holes](#if-there-are-no-holes) here, with the extra work of making sure the
+old field cannot be referenced (so leaving the old definition in for
+`genksyms`, but renaming the field otherwise so we get build errors if it's
+ever referenced in the kernel or binary drivers).
 
-#### Struct field re-ordering
+### Struct field re-ordering
 
 These are the easiest to neutralize as we should be able to re-order the
 fields back to where they were.  Example commit `aab312696d37 ("crypto:
@@ -1755,9 +1824,9 @@ The kABI fix simply puts the field back in place:
         u8 digest_size;         /* Number of bytes in digest */
 ```
 
-#### Enum value added
+### Enum value added
 
-##### That doesn't change subsequent values
+#### That doesn't change subsequent values
 
 This happens when new values are added at the very end of an enum, or where
 subsequent fields are all set to a specific value, for example in
@@ -1811,7 +1880,7 @@ index 0c1afef354e9..1b9ae87520c0 100644
 
 ```
 
-##### That does change subsequent values
+#### That does change subsequent values
 
 This one is more complicated and really depends if we can somehow re-order
 the newly added enum values without interfering with other values.
@@ -1860,7 +1929,7 @@ struct cgroup_bpf {
 Here, our driver would disagree on the `sizeof(struct cgroup_bpf)` and bad
 things would happen if we were to simply hide the fields from `genksyms`.
 
-#### Function prototype changes
+### Function prototype changes
 
 > [!NOTE]
 > This chapter is in progress
@@ -1884,4 +1953,4 @@ From this point, you can follow our regular process to make a kernel release.
 
 > [!NOTE]
 >
-> Add link to instruction on our process
+> [TODO] Add link to instruction on our process
