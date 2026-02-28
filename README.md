@@ -98,6 +98,12 @@ For each `/base` branch, a corresponding `/pre-base` branch is created from
 the upstream point where the patch-queue of our SRPM was applied onto.  As
 such, our patch-queue can be found with the range `/pre-base../base`.
 
+The branches are created by the
+[git-import-srpm](https://github.com/xcp-ng/xcp/blob/quentin-git-import-srpm/scripts/git-import-srpm)
+script run from within the SRPM repository.
+
+We also have an [elixir instance]() with the source code indexed for all
+past released RPMs.
 
 # Pre-requisites
 
