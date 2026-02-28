@@ -526,6 +526,10 @@ Go check its [README](https://github.com/xcp-ng/git-review-rebase) for more info
 
 ![git-review-rebase main view](imgs/git-review-rebase-main.png "git-review-rebase main view")
 
+
+![git-review-rebase diff view](imgs/git-review-rebase-diff.png "git-review-rebase diff view")
+
+
 ### Dropped commits on the rebase have a reason
 
 There may be commits that were present on the previous branch that simply
