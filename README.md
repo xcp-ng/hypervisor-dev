@@ -522,13 +522,18 @@ zero diffs.
 You should have installed `git-review-rebase` from the pre-requisites
 steps, now is time to use it.
 
-Go check its [README](https://github.com/xcp-ng/git-review-rebase) for more information.
-
 ![git-review-rebase main view](imgs/git-review-rebase-main.png "git-review-rebase main view")
 
+You can press `enter` when in the main view to see a side-by-side diff of commits:
 
 ![git-review-rebase diff view](imgs/git-review-rebase-diff.png "git-review-rebase diff view")
 
+You can toggle the blame output when in the diff view by pressing `b`,
+allows to see which commit introduced the conflict:
+
+![git-review-rebase diff blame view](imgs/git-review-rebase-diff-blame.png "git-review-rebase diff blame view")
+
+Go check its [README](https://github.com/xcp-ng/git-review-rebase) for more information.
 
 ### Dropped commits on the rebase have a reason
 
