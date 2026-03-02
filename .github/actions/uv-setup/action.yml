@@ -14,7 +14,7 @@ inputs:
   activate-environment:
     description: 'Wether to activate the virtual env or not'
     required: false
-    default: true
+    default: 'true'
     type: boolean
   working-directory:
     description: 'Use working-directory to run uv commands'
@@ -27,7 +27,7 @@ runs:
     - uses: astral-sh/setup-uv@bd01e18f51369d5a26f1651c3cb451d3417e3bba  # v6.3.1
       with:
         version: "0.7.x"
-        activate-environment: ${{ inputs.activate-environment }}
+        activate-environment: ${{ inputs.activate-environment || 'true' }}
         working-directory: ${{ inputs.working-directory }}
     - if: inputs.sync == 'true' && inputs.dev == 'false'
       run: uv sync --frozen --no-dev
