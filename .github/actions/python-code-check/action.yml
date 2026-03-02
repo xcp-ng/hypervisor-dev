@@ -1,0 +1,27 @@
+name: Python Code Check
+description: 'Run mypy, pyright, ruff, and flake8 on a Python project'
+inputs:
+  working-directory:
+    description: 'Directory containing the Python project to check'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - run: echo "FORCE_COLOR=1" >> $GITHUB_ENV
+      shell: bash
+    - uses: ./.github/actions/uv-setup/
+      with:
+        dev: true
+        working-directory: ${{ inputs.working-directory }}
+    - run: mypy --install-types --non-interactive .
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+    - run: pyright
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+    - run: ruff check
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+    - run: flake8 --config ${{ github.workspace }}/.flake8
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
