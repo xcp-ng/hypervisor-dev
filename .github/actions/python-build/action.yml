@@ -1,0 +1,23 @@
+name: Python Build
+description: 'Build a Python package with uv and upload the distribution artifacts'
+inputs:
+  working-directory:
+    description: 'Directory containing the Python project to build'
+    required: true
+  artifact-name:
+    description: 'Name for the uploaded artifact'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - uses: ./.github/actions/uv-setup/
+      with:
+        sync: false
+        working-directory: ${{ inputs.working-directory }}
+    - run: uv build
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.working-directory }}/dist/

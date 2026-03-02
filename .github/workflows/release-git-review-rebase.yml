@@ -1,0 +1,39 @@
+name: Create a release from tag - git-review-rebase
+
+permissions: {}
+
+on:
+  push:
+    tags:
+      - 'git-review-rebase-*'
+
+jobs:
+  build:
+    name: Build and store python artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/python-build/
+        with:
+          working-directory: scripts/git-review-rebase
+          artifact-name: git-review-rebase-artifacts
+
+  release:
+    name: Create and publish the release
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: git-review-rebase-artifacts
+          path: dist/
+      - name: Create release ${{ github.ref_name }}
+        run: gh release create ${GITHUB_REF_NAME} --repo ${{ github.repository }} --generate-notes dist/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
