@@ -5,6 +5,10 @@
   - [Branch convention](#branch-convention)
 - [Pre-requisites](#pre-requisites)
   - [Get a working build environment](#get-a-working-build-environment)
+- [Adding a new binary kernel module](#adding-a-new-binary-kernel-module)
+  - [Pull and get all sub-modules](#pull-and-get-all-sub-modules)
+  - [Add the new RPM repo as sub-module](#add-the-new-rpm-repo-as-sub-module)
+  - [Refreshing the kabi.locked_list file](#refreshing-the-kabilocked_list-file)
 - [Adding an upstream patch to our patch-queue](#adding-an-upstream-patch-to-our-patch-queue)
   - [Cherry-pick the commit](#cherry-pick-the-commit)
   - [Update the RPM repo](#update-the-rpm-repo)
@@ -65,6 +69,52 @@ cd xcp-ng-build-env
 # Install the xcp-ng-dev CLI
 uv tool install --editable .
 ```
+# Adding a new binary kernel module
+
+## Pull and get all sub-modules
+
+Let's make sure we work on top of main and that we have all the drivers
+sub-modules properly initialized as a pre-requisite step.
+
+```bash
+git pull --rebase origin main
+git submodule update --init
+```
+
+## Add the new RPM repo as sub-module
+
+```bash
+git submodule add <driver_repo> drivers/<driver_name>
+git commit -s -m "<driver_name>: add to the list of submodules."
+```
+
+## Refreshing the kabi.locked_list file
+
+As a new driver is added, we need to make sure we do not break the kABI it
+relies in future kernel updates.
+
+In order to do, we maintain a file listing all the symbols our binary
+drivers are using from the linux kernel in
+`kernel-abis/xcpng-8.3-kabi_lockedlist`.
+
+We need to refresh this file to include symbols from the newly added
+driver, the [generate_locked_list.sh](scripts/generate_locked_list.sh)
+script does just that:
+
+
+```bash
+
+# Refresh the list of locked symbols
+./scripts/generate_locked_list.sh ./kernel-abis/xcpng-8.3-kabi_lockedlist
+git add ./kernel-abis/xcpng-8.3-kabi_lockedlist
+
+# Refresh the types of information of locked symbols
+kabi consolidate --kabi ./kernel-abis/xcpng-8.3-kabi_lockedlist --input ./kernel-abis/Symtypes.build-4.19.19 --output ./kernel-abis/Modules.kabi-4.19.19
+git add kernel-abis/Modules.kabi-4.19.19
+
+git commit -s -m "kernel-abis: refreshed the list of locked symbols due to <driver_name> addition."
+```
+
 # Adding an upstream patch to our patch-queue
 
 Sometimes a fix or improvement from a newer upstream kernel needs to be
