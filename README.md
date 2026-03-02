@@ -37,6 +37,9 @@
   - [Update the RPM repo](#update-the-rpm-repo)
   - [Build the kernel RPMs](#build-the-kernel-rpms-1)
   - [Verify source RPM generates the same sources](#verify-source-rpm-generates-the-same-sources-1)
+- [Incorporating XenServer patch-queue changes](#incorporating-xenserver-patch-queue-changes)
+  - [Merging changes back in](#merging-changes-back-in)
+  - [Build and verify](#build-and-verify)
 
 <!-- markdown-toc end -->
 
@@ -654,3 +657,91 @@ against our locked list.
 
 Use `git diff <your-branch> <newly_imported_branch>` to verify there are
 zero diffs.
+
+# Incorporating XenServer patch-queue changes
+
+Our `SPECS/kernel.spec` contains two blocks of patches: XenServer's
+(numbered `Patch0` onwards) followed by ours (numbered `Patch1000`
+onwards).  When XenServer releases a new kernel SRPM, their patch-queue
+changes and we need to incorporate those changes into our branch.
+
+The following assumes the new XenServer SRPM is already imported as the
+`XS-8.3` branch in the SRPM repo.
+
+## Merging changes back in
+
+```bash
+cd /path/to/source/rpm/repo
+git merge origin/master
+```
+
+If you're lucky, XenServer folks added new patches on top of their current
+patch-queue, such that the numbering for all the existing patches remain
+unchanged.  In this case, the merge should be pretty straightforwards and
+without much difficult conflicts.
+
+OTOH, if they've added new patches in the middle of the workqueue, that's
+where things get a little trickier as you will get pretty disgusting
+conflicts.  The easiest way I found to deal with this is to first resolve
+all conflicts that are not related to the Patch lines, then make sure to
+discard any conflicts in those Patch lines and keeping as they were, then
+manually squeezing in the changes, first identifying what patches were
+added with something like:
+
+``` bash
+cd /path/to/source/rpm/repo/
+git diff origin/XS-8.3^- --word-diff --word-diff-regex='[^[:space:]]|Patch[0-9]+:' -- SPECS \
+	| grep '^{+Patch.*+}$' \
+	| sed -e 's/+}$//' -e 's/^{//'
+```
+
+Which should give you all newly added patches, then copy it manually to the
+`SPECS/kernel.spec` file and then update all the Patch numbers with the
+[change_spec_patch_offset.sh](./scripts/change_spec_patch_offset.h) script,
+for example, if the above `git diff` command gives you:
+
+``` diff
++Patch444: 0002-SUNRPC-Remove-the-bh-safe-lock-requirement-on-xprt-t.patch
++Patch445: 0003-SUNRPC-Replace-direct-task-wakeups-from-softirq-cont.patch
++Patch446: 0004-SUNRPC-Replace-the-queue-timer-with-a-delayed-work-f.patch
++Patch447: 0001-nbd-fix-possible-sysfs-duplicate-warning.patch
++Patch448: 0001-nbd-protect-cmd-status-with-cmd-lock.patch
++Patch449: 0001-nbd-handle-racing-with-error-ed-out-commands.patch
++Patch450: 0001-nbd-fix-a-block_device-refcount-leak-in-nbd_release.patch
++Patch451: 0001-nbd-Aovid-double-completion-of-a-request.patch
++Patch452: 0001-nbd-don-t-handle-response-without-a-corresponding-re.patch
++Patch453: 0001-nbd-make-sure-request-completion-won-t-concurrent.patch
+```
+
+That's **10** extra patches, starting at Patch444, so you'd run:
+
+``` bash
+./scripts/change_spec_patch_offset.sh /path/to/source/rpm/repo/SPECS/kernel.spec 444 10
+```
+
+The script should be smart enough to fix all indexes for you as well as
+ignore patch indexes that are specific to XCP-ng.
+
+You can then git add and git commit.
+
+## Build and verify
+
+Once all changes are incorporated, build the RPMs:
+
+```bash
+cd /path/to/srpm/repo
+xcp-ng-dev container build 8.3 ./
+```
+
+If the build fails, refer to [Incorrect conflict
+resolution](#incorrect-conflict-resolution).
+
+Once built, `check-kabi` will verify the symbol exports and it should not
+fail at this step given XenServer folks guarantee a stable kABI.
+
+Finally, verify the source RPM round-trips cleanly:
+
+```bash
+git commit -s -m "kernel: incorporate XS <xs-version> changes"
+/path/to/xcp/repo/scripts/git-import-srpm HEAD
+```
