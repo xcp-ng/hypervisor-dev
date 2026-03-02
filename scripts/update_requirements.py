@@ -9,7 +9,7 @@ parser = argparse.ArgumentParser(
 )
 args = parser.parse_args()
 
-PROJECT_DIR = Path(__file__).parent.parent
+PROJECT_DIR = Path.cwd()
 HEADER = "# generated with update_requirements.py, do not edit manually"
 
 with open(f"{PROJECT_DIR}/pyproject.toml", "rb") as f:
