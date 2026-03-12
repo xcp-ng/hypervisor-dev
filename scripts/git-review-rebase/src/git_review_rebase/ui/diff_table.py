@@ -129,11 +129,15 @@ class DiffPrettyRowMaker:
             right_text.highlight_words([self.search_term], "reverse")
 
     @staticmethod
-    def prefix_blame_info(commit: pygit2.Commit, line_text: Text) -> Text:
+    def prefix_blame_info(commit_sha1: pygit2.Oid, line_text: Text) -> Text:
         new_line = Text("")
-        new_line.append_text(Text(abbrev(commit.id) + " ", SolarizedColors.Yellow))
+        new_line.append_text(Text(abbrev(commit_sha1) + " ", SolarizedColors.Yellow))
         new_line.append_text(line_text)
         return new_line
+
+    @classmethod
+    def prefix_commit_blame_info(cls, commit: pygit2.Commit, line_text: Text) -> Text:
+        return cls.prefix_blame_info(commit.id, line_text)
 
     async def prefix(self, diff_parser: DiffParser, commit: pygit2.Commit, cur_line: Text) -> Text:
         if not diff_parser.within_hunk():
@@ -141,11 +145,23 @@ class DiffPrettyRowMaker:
 
         if not cur_line.plain.startswith("+"):
             position = diff_parser.get_current_position()
+            if position.old_file is None or cur_line.plain.startswith("\\"):
+                # Either the file is added in the current commit, so no
+                # point trying to infer blame information, or `git show`
+                # output might be stuffing extra information in the diff
+                # output like a "\ No newline at end of file" - for these
+                # cases simply print a null sha1 as prefix.
+                return self.prefix_blame_info(pygit2.Oid(hex="0" * 40), cur_line)
+
             assert self.blame_cache is not None
             blame_info = self.blame_cache.get_blame_info(commit.parents[0], position.old_file)
             commit = await blame_info.commit_at(position.old_line_number - 1)
+        else:
+            # Here, the to be blamed commit is the one we're looking at,
+            # because it is the one adding that line, fall-through.
+            pass
 
-        return self.prefix_blame_info(commit, cur_line)
+        return self.prefix_commit_blame_info(commit, cur_line)
 
     async def add_blame_info(
         self, left_text: Text, middle_text: Text, right_text: Text

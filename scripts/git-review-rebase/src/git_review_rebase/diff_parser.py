@@ -61,9 +61,9 @@ class DiffParser:
 
     def record_header_information(self, line: str) -> None:
         if self.is_old_file_header(line):
-            self.old_file = line[6:].strip()
+            self.old_file = line[6:].strip() if "/dev/null" not in line else None
         elif self.is_new_file_header(line):
-            self.new_file = line[6:].strip()
+            self.new_file = line[6:].strip() if "/dev/null" not in line else None
         elif self.is_hunk_header(line):
             m = self.hunk_pattern.match(line)
             if m is None:

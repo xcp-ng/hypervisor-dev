@@ -52,6 +52,7 @@ class BlameCache:
             self.get_blame_info(commit.parents[0], delta.old_file.path)
 
     def get_blame_info(self, commit: pygit2.Commit, file_path: str) -> BlameInfo:
+        assert file_path is not None
         key = (commit.id, file_path)
         if key in self.blame_infos:
             return self.blame_infos[key]
