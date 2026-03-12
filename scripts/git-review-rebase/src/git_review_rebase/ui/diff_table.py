@@ -6,7 +6,7 @@ from difflib import SequenceMatcher
 from tempfile import NamedTemporaryFile
 
 import pygit2
-from pygments.lexers import get_lexer_for_filename
+from pygments.lexers import ClassNotFound, TextLexer, get_lexer_for_filename
 from rich.text import Text
 from textual.message import Message
 from textual.widgets import DataTable
@@ -77,8 +77,12 @@ class DiffPrettyRowMaker:
         if not should_highlight_tokens:
             return
 
-        assert self.left_diff.old_file is not None
-        lexer = get_lexer_for_filename(self.left_diff.old_file)
+        lexer_file = self.left_diff.old_file or self.left_diff.new_file
+        assert lexer_file is not None
+        try:
+            lexer = get_lexer_for_filename(lexer_file)
+        except ClassNotFound:
+            lexer = TextLexer()
         left_tokens = [v for _, v in lexer.get_tokens(left_text.plain[1:])]
         right_tokens = [v for _, v in lexer.get_tokens(right_text.plain[1:])]
 
