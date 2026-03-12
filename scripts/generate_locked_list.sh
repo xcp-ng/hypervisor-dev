@@ -32,29 +32,29 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$OUTPUT_FILE" ]]; then
+if [[ -z "${OUTPUT_FILE}" ]]; then
     echo "Error: OUTPUT_FILE is required"
     echo "Usage: $0 [--no-checks] [--skip-driver-build] <OUTPUT_FILE>"
     exit 1
 fi
 
-if [[ "$NO_CHECKS" == false ]]; then
-    VATES_REMOTE="$(git remote -v | grep github.com | grep xcp-ng | awk '{print $1}')"
+if [[ "${NO_CHECKS}" == false ]]; then
+    VATES_REMOTE="$(git remote -v | grep github.com | grep xcp-ng | grep fetch | awk '{print $1}' | sort -u | head -n 1)"
 
-    git fetch ${VATES_REMOTE}
+    git fetch "${VATES_REMOTE}"
 
-    if [[ $(git rev-parse HEAD) -ne $(git rev-parse ${VATES_REMOTE}/master) ]] ; then
-        echo "Repository's HEAD is not up-to-date with ${VATES_REMOTE}/master"
+    if [[ $(git rev-parse HEAD) != $(git ls-remote "${VATES_REMOTE}" HEAD | cut -f1) ]] ; then
+        echo "Repository's HEAD is not up-to-date with ${VATES_REMOTE}/HEAD"
         exit 1
     fi
 
-    if [[ -n $(git status) ]]; then
+    if [[ -n $(git status -s) ]]; then
         echo "Repository has uncommitted changes"
         exit 1
     fi
 fi
 
-if [[ "$SKIP_BUILD" == false ]]; then
+if [[ "${SKIP_BUILD}" == false ]]; then
     git submodule foreach "
         xcp-ng-dev container build 8.3 ./
     "
@@ -64,6 +64,6 @@ git submodule --quiet foreach "
     set -eu
     echo \"[\$(basename \${name})]\"
     for module in \$(find ./ -name \\*.ko); do
-    	objdump -t \${module} | awk '/UND/{print \"\t\" \$NF}'
+    	objdump -t \"\${module}\" | awk '/UND/{print \"\t\" \$NF}'
     done | sort -u
 " > "${OUTPUT_FILE}"
