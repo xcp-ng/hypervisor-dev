@@ -1,7 +1,15 @@
 import argparse
 import sys
+from pathlib import Path
 
 from . import commands
+
+
+def existing_file(path_str: str) -> str:
+    path = Path(path_str)
+    if not path.is_file():
+        raise argparse.ArgumentTypeError(f"{path_str} is not a valid file")
+    return path_str
 
 
 def main() -> None:
@@ -18,7 +26,11 @@ def main() -> None:
         ),
     )
     report_p.set_defaults(func=commands.report)
-    report_p.add_argument("symtypes", help="symtypes file or collection")
+    report_p.add_argument(
+        "symtypes",
+        type=existing_file,
+        help="symtypes file or collection",
+    )
 
     check_p = subp.add_parser(
         "check",
@@ -35,21 +47,25 @@ def main() -> None:
         "-k",
         help="Module.kabi file (the kABI declaration)",
         required=True,
+        type=existing_file,
     )
     check_p.add_argument(
         "--symvers-build",
         "-s",
         help="Module.symvers file (created from a recent build)",
         required=True,
+        type=existing_file,
     )
     check_p.add_argument(
         "--symtypes-kabi",
         "-K",
+        type=existing_file,
         help="Symtypes.kabi file (symtypes collection from kABI)",
     )
     check_p.add_argument(
         "--symtypes-build",
         "-S",
+        type=existing_file,
         help="Symtypes.build file (symtypes collection from build)",
     )
 
@@ -91,6 +107,7 @@ def main() -> None:
         "-i",
         help="Input Symtypes",
         required=True,
+        type=existing_file,
     )
     consolidate_p.add_argument(
         "--output",
@@ -101,6 +118,7 @@ def main() -> None:
     consolidate_p.add_argument(
         "--kabi",
         "-k",
+        type=existing_file,
         help=(
             "Module.symvers or kabi_lockedlist containing the list of kABI symbols to filter to."
         ),
@@ -113,10 +131,12 @@ def main() -> None:
     compare_p.set_defaults(func=commands.compare)
     compare_p.add_argument(
         "symtypes_lhs",
+        type=existing_file,
         help="Symtypes file for baseline (e.g. kABI reference)",
     )
     compare_p.add_argument(
         "symtypes_rhs",
+        type=existing_file,
         help=("Symtypes file for comparison (e.g. mm/slub.symtypes or Symtypes.build)"),
     )
     compare_p.add_argument(
@@ -149,6 +169,7 @@ def main() -> None:
     )
     debug_p.add_argument(
         "symtypes",
+        type=existing_file,
         help="kABI symtypes file",
     )
 
@@ -160,16 +181,22 @@ def main() -> None:
     smoke_p.add_argument(
         "--symtypes",
         "-t",
+        required=True,
+        type=existing_file,
         help="Symtypes.kabi file",
     )
     smoke_p.add_argument(
         "--symvers",
         "-v",
+        required=True,
+        type=existing_file,
         help="Module.kabi file",
     )
     smoke_p.add_argument(
         "--lockedlist",
         "-l",
+        required=True,
+        type=existing_file,
         help="kabi_lockedlist file",
     )
 
@@ -182,6 +209,7 @@ def main() -> None:
         "--locked-file",
         "-l",
         required=True,
+        type=existing_file,
         metavar="KABI.LOCKED_FILE",
         help="Path to the kabi.locked_file (e.g. xcpng-8.3-kabi.locked_list)",
     )
@@ -201,23 +229,27 @@ def main() -> None:
     )
     tui_p.add_argument(
         "--old-vmlinux",
+        type=existing_file,
         metavar="VMLINUX.O",
         required=False,
         help="Unstripped vmlinux.o file before changes",
     )
     tui_p.add_argument(
         "--new-vmlinux",
+        type=existing_file,
         metavar="VMLINUX.O",
         required=False,
         help="Unstripped vmlinux.o file after changes",
     )
     tui_p.add_argument(
         "symtypes_lhs",
+        type=existing_file,
         metavar="OLD-Modules.kabi|OLD-Symtypes.build",
         help="Symtypes file for baseline (e.g. kABI Modules.kabi-v4.19.19)",
     )
     tui_p.add_argument(
         "symtypes_rhs",
+        type=existing_file,
         metavar="NEW-Modules.kabi|NEW-Symtypes.build",
         help=("Symtypes file for comparison (e.g. Symtypes.build-v4.19.325)"),
     )
