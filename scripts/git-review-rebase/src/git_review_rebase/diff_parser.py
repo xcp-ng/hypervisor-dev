@@ -18,7 +18,7 @@ class DiffPosition:
 
 
 class DiffParser:
-    hunk_pattern = re.compile(r"@@ -(?P<old_start>\d+),\d+ \+(?P<new_start>\d+),\d+ @@.*")
+    hunk_pattern = re.compile(r"@@ -(?P<old_start>\d+)(,\d+)? \+(?P<new_start>\d+)(,\d+)? @@.*")
 
     def __init__(self):
         self.last_line: None | str = None
