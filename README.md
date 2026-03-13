@@ -101,8 +101,8 @@ the upstream point where the patch-queue of our SRPM was applied onto.  As
 such, our patch-queue can be found with the range `/pre-base../base`.
 
 The branches are created by the
-[git-import-srpm](https://github.com/xcp-ng/xcp/blob/quentin-git-import-srpm/scripts/git-import-srpm)
-script run from within the SRPM repository.
+[git-import-srpm](./scripts/git-import-srpm) script run from within the
+SRPM repository.
 
 We also have an [elixir instance]() with the source code indexed for all
 past released RPMs.
@@ -200,17 +200,16 @@ rebasing the source code branches:
 
 You should have installed `git-review-rebase` from the [Install the
 git-review-rebase tool chapter](#install-the-git-review-rebase-tool), we'll
-also need `git-import-srpm` which is present in the [main
-xcp](https://www.github.com/xcp-ng/xcp) repository:
-
-```bash
-git clone git@github.com:xcp-ng/xcp.git
-# Lives in scripts/git-import-srpm
-```
+also need `git-import-srpm` which is present in the [scripts](./scripts/)
+directory.
 
 Note that `git-import-srpm` is a simple bash script and doesn't need any
-prior configuration before use, it is present in
-`/path/to/xcp/repo/scripts/git-import-srpm`.
+prior configuration before use, although it does need working `rpmbuild`
+and `rpmspec` tools, which can be installed on Debian derivates with:
+
+```bash
+sudo apt-get install rpm
+```
 
 ## Rebase the kernel to latest upstream
 
@@ -517,7 +516,7 @@ verify that your src RPM will generate the same sources.
 ```bash
 cd /path/to/rpm/repo
 git commit -s -m "kernel: rebase to v4.19.325"
-/path/to/xcp/repo/scripts/git-import-srpm HEAD
+/path/to/hypervisor-dev/repo/scripts/git-import-srpm HEAD
 ```
 
 This should create a new branch, you can then use `git diff
@@ -686,7 +685,7 @@ against our locked list.  If it reports breakage, follow
 ## Verify source RPM generates the same sources
 
 ```bash
-/path/to/xcp/repo/scripts/git-import-srpm HEAD
+/path/to/hypervisor-dev/repo/scripts/git-import-srpm HEAD
 ```
 
 Use `git diff <your-branch> <newly_imported_branch>` to verify there are
@@ -773,11 +772,11 @@ Once built, `check-kabi` will verify the symbol exports and it should not
 fail at this step given XenServer folks guarantee a stable kABI.
 
 Finally, verify that the source RPM can be imported as a source branch
-cleanly using the `git-import-srpm` script:
+cleanly using the [`git-import-srpm`](./scripts/git-import-srpm) script:
 
 ```bash
 git commit -s -m "kernel: incorporate XS <xs-version> changes"
-/path/to/xcp/repo/scripts/git-import-srpm HEAD
+/path/to/hypervisor-dev/repo/scripts/git-import-srpm HEAD
 ```
 
 # Handling kABI breakage
