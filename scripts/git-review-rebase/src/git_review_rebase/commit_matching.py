@@ -72,11 +72,33 @@ class RebasedCommitsMatches:
             if right_commit is not None and right_commit.id in right_commit_keys:
                 del right_commit_keys[right_commit.id]
 
-        # Remainders commits on the right side
+        right_position = {oid: idx for idx, oid in enumerate(self.right_range._rebased_commits)}
+
+        added_commits: list[tuple[pygit2.Oid, RebasedCommitMatch]] = []
         for right_commit_id in right_commit_keys:
             right_commit = self.repo.get(right_commit_id)
             assert isinstance(right_commit, pygit2.Commit)
-            self.commit_matches[right_commit_id] = RebasedCommitMatch(
-                None, right_commit, CommitMatchInfoFlag.Added
+            added_commits.append(
+                (right_commit_id, RebasedCommitMatch(None, right_commit, CommitMatchInfoFlag.Added))
             )
-        self.commit_matches.update(left_commit_matches)
+
+        # Interleave Added commits with left commits based on right-branch position.
+        # For each matched left commit, flush Added commits whose right-branch position
+        # comes before it. Dropped/PresentInRebaseOnto left commits (no position in
+        # right_position) are passed through immediately without flushing.
+        added_idx = 0
+        for left_commit_oid, left_match in left_commit_matches.items():
+            if left_match.right_commit is not None and left_match.right_commit.id in right_position:
+                current_right_pos = right_position[left_match.right_commit.id]
+                while (
+                    added_idx < len(added_commits)
+                    and right_position[added_commits[added_idx][0]] < current_right_pos
+                ):
+                    added_commit_id, added_commit_match_info = added_commits[added_idx]
+                    self.commit_matches[added_commit_id] = added_commit_match_info
+                    added_idx += 1
+            self.commit_matches[left_commit_oid] = left_match
+
+        # Append remaining Added commits (those after all matched right commits)
+        for added_commit_id, added_commit_match_info in added_commits[added_idx:]:
+            self.commit_matches[added_commit_id] = added_commit_match_info
