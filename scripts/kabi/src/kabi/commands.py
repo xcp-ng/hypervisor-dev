@@ -68,9 +68,11 @@ def check(args: argparse.Namespace) -> NoReturn:
         print()
 
     if not changed_license and not changed_abi and not unexported:
+        print("No kABI changes detected, all good.")
         sys.exit(0)
 
     if not changed_abi:
+        print("No kABI changes detected, but some symbols were removed or licenses have changed.")
         sys.exit(1)
 
     if not args.symtypes_kabi or not args.symtypes_build:
