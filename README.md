@@ -682,11 +682,11 @@ without much difficult conflicts.
 
 OTOH, if they've added new patches in the middle of the workqueue, that's
 where things get a little trickier as you will get pretty disgusting
-conflicts.  The easiest way I found to deal with this is to first resolve
-all conflicts that are not related to the Patch lines, then make sure to
-discard any conflicts in those Patch lines and keeping as they were, then
-manually squeezing in the changes, first identifying what patches were
-added with something like:
+conflicts.  Resolve all conflicts that are _not_ related to the Patch
+lines, then discard any conflicts in those Patch lines (keep as they were
+before the cherry-pick), then manually copy/paste the extra `Patch` lines.
+You can use the following one-liner to get the list of added `Patch` lines
+like:
 
 ``` bash
 cd /path/to/source/rpm/repo/
@@ -695,8 +695,7 @@ git diff origin/XS-8.3^- --word-diff --word-diff-regex='[^[:space:]]|Patch[0-9]+
 	| sed -e 's/+}$//' -e 's/^{//'
 ```
 
-Which should give you all newly added patches, then copy it manually to the
-`SPECS/kernel.spec` file and then update all the Patch numbers with the
+All the Patch indexes can now be "offset" with the
 [change_spec_patch_indexes.sh](./scripts/change_spec_patch_indexes.sh)
 script, for example, if the above `git diff` command gives you:
 
@@ -739,7 +738,8 @@ resolution](#incorrect-conflict-resolution).
 Once built, `check-kabi` will verify the symbol exports and it should not
 fail at this step given XenServer folks guarantee a stable kABI.
 
-Finally, verify the source RPM round-trips cleanly:
+Finally, verify that the source RPM can be imported as a source branch
+cleanly using the `git-import-srpm` script:
 
 ```bash
 git commit -s -m "kernel: incorporate XS <xs-version> changes"
