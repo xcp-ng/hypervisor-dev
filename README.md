@@ -865,7 +865,7 @@ changes.  It needs a few inputs in order to present information on changed
 types, pahole outputs (useful to find information about holes and padding),
 commits that introduced the kABI change:
 
-- `--repository`: Path to the linux repository, e.g. `--repository ~/repos/linux`
+- `--repository`: Path to the linux repository, e.g. `--repository ~/repos/linux` (default to current working directory).
 - `--rev-list`: Git range before/after rebase, e.g. `--rev-list v4.19.19..v4.19.325-cip129`
 - `--old-vmlinux/--new-vmlinux`: Path to an unstripped vmlinux.o file, e.g. `--old-vmlinux vmlinux-4.19.19.o`
 - `--locked-file`: Path to the `kabi.locked_list`
