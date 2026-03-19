@@ -24,6 +24,13 @@ def parse_args() -> argparse.Namespace:
         dest="cache",
         help="Disable patchid caching",
     )
+    parser.add_argument(
+        "--no-upstream-patchid",
+        dest="upstream_patchid_lookup",
+        action="store_false",
+        default=True,
+        help="Do not perform patch-id calculation for ancestors of the right range.",
+    )
     parser.add_argument("left_range", help="Left range in format: base..branch")
     parser.add_argument("right_range", help="Right range in format: base..branch")
     args = parser.parse_args()
