@@ -2,6 +2,7 @@
 
 from collections import OrderedDict
 
+import argparse
 import pygit2
 
 from .constants import CacheFlags
@@ -13,6 +14,7 @@ class BranchRange:
 
     def __init__(
         self,
+        args: argparse.Namespace,
         repo: pygit2.Repository,
         start_range: str,
         end_range: str,
@@ -20,6 +22,7 @@ class BranchRange:
         merge_base: None | pygit2.Oid = None,
     ) -> None:
         """Initialize a BranchRange."""
+        self.args = args
         self.start_range = start_range
         self.start_range_oid = oid(repo, self.start_range)
         self.end_range = end_range
@@ -59,11 +62,14 @@ class BranchRange:
             if not passed_upstream:
                 self._rebased_commits[commit.id] = commit
 
+        commit_worklist = list(
+            self._commit_by_oid.keys() if self.args.upstream_patchid_lookup else self._rebased_commits.keys()
+        )
         self._commit_by_patchid.update(
             {
                 pygit2.Oid(hex=k): self._get_commit(v)
                 for k, v in patchids(
-                    self._repo, list(self._commit_by_oid.keys()), self._cache_flags
+                    self._repo, commit_worklist, self._cache_flags
                 ).items()
             }
         )
