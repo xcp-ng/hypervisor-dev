@@ -132,6 +132,7 @@ class GitReviewRebase(App):
         )
         self.left_range = await asyncio.to_thread(
             BranchRange,
+            self.args,
             self.repo,
             self.args.left_range.split("..")[0],
             self.args.left_range.split("..")[1],
@@ -139,6 +140,7 @@ class GitReviewRebase(App):
         )
         self.right_range = await asyncio.to_thread(
             BranchRange,
+            self.args,
             self.repo,
             self.args.right_range.split("..")[0],
             self.args.right_range.split("..")[1],
