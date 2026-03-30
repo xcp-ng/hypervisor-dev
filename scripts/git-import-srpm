@@ -356,6 +356,7 @@ SRPM_REPO_REVISION=$1
 TMPDIR=$(mktemp -d -t src-import-xen-XXX)
 if [[ -z ${DONT_DELETE_TMP_DIR:-} ]]; then
     trap '
+test "${RPMBUILD_PID:-}" && kill ${RPMBUILD_PID} || :
 rm -Rf ${TMPDIR:-/a/path/that/does/not/exist}
 cd ${CODE_REPO_PATH}
 git worktree prune
