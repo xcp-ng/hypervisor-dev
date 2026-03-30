@@ -69,9 +69,21 @@ function get_build_dir() {
 
     check_spec_file "${worktree}" "${revision}"
 
-    git -C "${worktree}" show "${revision}:${SPEC_FILE}" | \
-        rpmspec --query --define "_topdir ${worktree}" --qf '%{name}-%{version}\n' /dev/stdin | \
-        awk 'NR == 1'
+    local build_dirname=$(git -C "${worktree}" show "${revision}:${SPEC_FILE}" | \
+		   rpmspec --query --define "_topdir ${worktree}" --qf '%{name}-%{version}\n' /dev/stdin | \
+		   awk 'NR == 1'
+	    )
+    local build_dir="${worktree}/BUILD/${build_dirname}"
+    if [[ ! -d "${build_dir}" ]] ; then
+	# rpmbuild version 6.x are building in a sub-directory
+        build_dir="${worktree}/BUILD/${build_dirname}-build/${build_dirname}"
+    fi
+
+    if [[ ! -d "${build_dir}" ]]; then
+	echo "Could not infer an existing build directory"
+	exit 1
+    fi
+    echo "${build_dir}"
 }
 
 function get_base_version() {
@@ -409,7 +421,7 @@ wait "${RPMBUILD_PID}" || {
     exit 1
 } && {
     build_dir="$(get_build_dir "${SRPM_REPO_WORKTREE}" "${SRPM_REPO_REVISION}")"
-    git -C "${CODE_REPO_WORKTREE}" --work-tree "${SRPM_REPO_WORKTREE}/BUILD/${build_dir}" add -A
+    git -C "${CODE_REPO_WORKTREE}" --work-tree "${build_dir}" add -A
     export_author
     git -C "${CODE_REPO_WORKTREE}" commit ${GIT_COMMIT_OPTIONS} -s --date="${GIT_COMMITTER_DATE}" -m "rpmbuild: remaining diff." 2>> "${COMMAND_LOGS}" >> "${COMMAND_LOGS}" || :
 }
