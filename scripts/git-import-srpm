@@ -128,7 +128,7 @@ function get_branch_name() {
     if [[ -z ${vendor} || -z ${full_version} ]]; then
         echo "unknown_branch_name_for_rev_${revision}"
     else
-        echo "${PRODUCT}/${vendor}-${full_version}/base"
+        echo "${PRODUCT}/${vendor}-${full_version}/patched"
     fi
 
 }
@@ -164,7 +164,7 @@ function init_worktrees() {
     }
 
     git -C "${CODE_REPO_PATH}" worktree add -B "${BRANCH_NAME}-partial" "${code_repo_worktree}" "${base_version}" >> "${COMMAND_LOGS}"
-    git -C "${CODE_REPO_PATH}" branch -f "${BRANCH_NAME%base}pre-base" "${base_version}"
+    git -C "${CODE_REPO_PATH}" branch -f "${BRANCH_NAME%patched}source" "${base_version}"
 }
 
 # Fix the date in case it is not present in the patch file to get
