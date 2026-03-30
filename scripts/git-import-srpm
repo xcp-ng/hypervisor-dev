@@ -391,7 +391,12 @@ git show "HEAD:${SPEC_FILE}" | while IFS= read -r l; do
             p="${l#* }"
             apply_patch "${CODE_REPO_WORKTREE}" "${SRPM_REPO_WORKTREE}/SOURCES/${p}" >> "${COMMAND_LOGS}" 2>> "${COMMAND_LOGS}" || {
                 echo "[-] [apply_patch] Failed reconstructing ${BRANCH_NAME} for ${SRPM_REPO_REVISION}, check ${COMMAND_LOGS}"
-                exit 1
+                if [[ -z "${CARRY_ON:-}" ]]; then
+                    exit 1
+                else
+                    git am --abort || :
+                    git reset --hard || :
+                fi
             }
             ;;
         *)
