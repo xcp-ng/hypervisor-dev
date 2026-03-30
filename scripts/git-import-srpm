@@ -126,7 +126,7 @@ function get_branch_name() {
     full_version="$(get_full_version "${base_version}" "${release}")"
 
     if [[ -z ${vendor} || -z ${full_version} ]]; then
-        echo "unknown_branch_name_for_rev_${revision}"
+        echo "unknown_branch_name_for_rev_${revision} vendor=${vendor:-} full_version=${full_version:-}"
     else
         echo "${PRODUCT}/${vendor}-${full_version}/patched"
     fi
