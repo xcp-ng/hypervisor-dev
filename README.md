@@ -154,7 +154,7 @@ git submodule update --init
 ## Add the new RPM repo as sub-module
 
 ```bash
-git submodule add <driver_repo> drivers/<driver_name>
+git submodule add <driver_repo> drivers/8.3/srpm/<driver_name>
 git commit -s -m "<driver_name>: add to the list of submodules."
 ```
 

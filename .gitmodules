@@ -1,72 +1,144 @@
-[submodule "avago-megaraid-sas"]
-	path = drivers/avago-megaraid-sas
+[submodule "drivers/8.3/srpm/avago-megaraid-sas"]
+	path = drivers/8.3/srpm/avago-megaraid-sas
 	url = git@github.com:xcp-ng-rpms/avago-megaraid-sas.git
-[submodule "drivers/avago-mpt3sas"]
-	path = drivers/avago-mpt3sas
+[submodule "drivers/8.3/srpm/avago-mpt3sas"]
+	path = drivers/8.3/srpm/avago-mpt3sas
 	url = git@github.com:xcp-ng-rpms/avago-mpt3sas.git
-[submodule "drivers/broadcom-bnxt-en"]
-	path = drivers/broadcom-bnxt-en
+[submodule "drivers/8.3/srpm/broadcom-bnxt-en"]
+	path = drivers/8.3/srpm/broadcom-bnxt-en
 	url = git@github.com:xcp-ng-rpms/broadcom-bnxt-en.git
-[submodule "drivers/chelsio-cxgb4"]
-	path = drivers/chelsio-cxgb4
+[submodule "drivers/8.3/srpm/chelsio-cxgb4"]
+	path = drivers/8.3/srpm/chelsio-cxgb4
 	url = git@github.com:xcp-ng-rpms/chelsio-cxgb4.git
-[submodule "drivers/cisco-enic"]
-	path = drivers/cisco-enic
+[submodule "drivers/8.3/srpm/cisco-enic"]
+	path = drivers/8.3/srpm/cisco-enic
 	url = git@github.com:xcp-ng-rpms/cisco-enic.git
-[submodule "drivers/cisco-fnic"]
-	path = drivers/cisco-fnic
+[submodule "drivers/8.3/srpm/cisco-fnic"]
+	path = drivers/8.3/srpm/cisco-fnic
 	url = git@github.com:xcp-ng-rpms/cisco-fnic.git
-[submodule "drivers/emulex-lpfc"]
-	path = drivers/emulex-lpfc
+[submodule "drivers/8.3/srpm/emulex-lpfc"]
+	path = drivers/8.3/srpm/emulex-lpfc
 	url = git@github.com:xcp-ng-rpms/emulex-lpfc.git
-[submodule "drivers/intel-e1000e"]
-	path = drivers/intel-e1000e
+[submodule "drivers/8.3/srpm/intel-e1000e"]
+	path = drivers/8.3/srpm/intel-e1000e
 	url = git@github.com:xcp-ng-rpms/intel-e1000e.git
-[submodule "drivers/intel-fm10k"]
-	path = drivers/intel-fm10k
+[submodule "drivers/8.3/srpm/intel-fm10k"]
+	path = drivers/8.3/srpm/intel-fm10k
 	url = git@github.com:xcp-ng-rpms/intel-fm10k.git
-[submodule "drivers/intel-i40e"]
-	path = drivers/intel-i40e
+[submodule "drivers/8.3/srpm/intel-i40e"]
+	path = drivers/8.3/srpm/intel-i40e
 	url = git@github.com:xcp-ng-rpms/intel-i40e.git
-[submodule "drivers/intel-ice"]
-	path = drivers/intel-ice
+[submodule "drivers/8.3/srpm/intel-ice"]
+	path = drivers/8.3/srpm/intel-ice
 	url = git@github.com:xcp-ng-rpms/intel-ice.git
-[submodule "drivers/intel-igb"]
-	path = drivers/intel-igb
+[submodule "drivers/8.3/srpm/intel-igb"]
+	path = drivers/8.3/srpm/intel-igb
 	url = git@github.com:xcp-ng-rpms/intel-igb.git
-[submodule "drivers/intel-igc"]
-	path = drivers/intel-igc
+[submodule "drivers/8.3/srpm/intel-igc"]
+	path = drivers/8.3/srpm/intel-igc
 	url = git@github.com:xcp-ng-rpms/intel-igc.git
-[submodule "drivers/intel-ixgbe"]
-	path = drivers/intel-ixgbe
+[submodule "drivers/8.3/srpm/intel-ixgbe"]
+	path = drivers/8.3/srpm/intel-ixgbe
 	url = git@github.com:xcp-ng-rpms/intel-ixgbe.git
-[submodule "drivers/microsemi-aacraid"]
-	path = drivers/microsemi-aacraid
+[submodule "drivers/8.3/srpm/microsemi-aacraid"]
+	path = drivers/8.3/srpm/microsemi-aacraid
 	url = git@github.com:xcp-ng-rpms/microsemi-aacraid.git
-[submodule "drivers/mellanox-mlnxen"]
-	path = drivers/mellanox-mlnxen
+[submodule "drivers/8.3/srpm/mellanox-mlnxen"]
+	path = drivers/8.3/srpm/mellanox-mlnxen
 	url = git@github.com:xcp-ng-rpms/mellanox-mlnxen.git
-[submodule "drivers/microsemi-smartpqi"]
-	path = drivers/microsemi-smartpqi
+[submodule "drivers/8.3/srpm/microsemi-smartpqi"]
+	path = drivers/8.3/srpm/microsemi-smartpqi
 	url = git@github.com:xcp-ng-rpms/microsemi-smartpqi.git
-[submodule "drivers/qlogic-fastlinq"]
-	path = drivers/qlogic-fastlinq
+[submodule "drivers/8.3/srpm/qlogic-fastlinq"]
+	path = drivers/8.3/srpm/qlogic-fastlinq
 	url = git@github.com:xcp-ng-rpms/qlogic-fastlinq.git
-[submodule "drivers/qlogic-netxtreme2"]
-	path = drivers/qlogic-netxtreme2
+[submodule "drivers/8.3/srpm/qlogic-netxtreme2"]
+	path = drivers/8.3/srpm/qlogic-netxtreme2
 	url = git@github.com:xcp-ng-rpms/qlogic-netxtreme2.git
-[submodule "drivers/qlogic-qla2xxx"]
-	path = drivers/qlogic-qla2xxx
+[submodule "drivers/8.3/srpm/qlogic-qla2xxx"]
+	path = drivers/8.3/srpm/qlogic-qla2xxx
 	url = git@github.com:xcp-ng-rpms/qlogic-qla2xxx.git
-[submodule "drivers/aqc111u-module"]
-	path = drivers/aqc111u-module
+[submodule "drivers/8.3/srpm/aqc111u-module"]
+	path = drivers/8.3/srpm/aqc111u-module
 	url = git@github.com:xcp-ng-rpms/aqc111u-module.git
-[submodule "drivers/dell-rbu-module"]
-	path = drivers/dell-rbu-module
+[submodule "drivers/8.3/srpm/dell-rbu-module"]
+	path = drivers/8.3/srpm/dell-rbu-module
 	url = git@github.com:xcp-ng-rpms/dell-rbu-module.git
-[submodule "drivers/mpi3mr-module"]
-	path = drivers/mpi3mr-module
+[submodule "drivers/8.3/srpm/mpi3mr-module"]
+	path = drivers/8.3/srpm/mpi3mr-module
 	url = git@github.com:xcp-ng-rpms/mpi3mr-module.git
-[submodule "drivers/r8125-module"]
-	path = drivers/r8125-module
+[submodule "drivers/8.3/srpm/r8125-module"]
+	path = drivers/8.3/srpm/r8125-module
+	url = git@github.com:xcp-ng-rpms/r8125-module.git
+[submodule "drivers/8.3/source/aqc111u-module"]
+	path = drivers/8.3/source/aqc111u-module
+	url = git@github.com:xcp-ng-rpms/aqc111u-module.git
+[submodule "drivers/8.3/source/avago-megaraid-sas"]
+	path = drivers/8.3/source/avago-megaraid-sas
+	url = git@github.com:xcp-ng-rpms/avago-megaraid-sas.git
+[submodule "drivers/8.3/source/avago-mpt3sas"]
+	path = drivers/8.3/source/avago-mpt3sas
+	url = git@github.com:xcp-ng-rpms/avago-mpt3sas.git
+[submodule "drivers/8.3/source/broadcom-bnxt-en"]
+	path = drivers/8.3/source/broadcom-bnxt-en
+	url = git@github.com:xcp-ng-rpms/broadcom-bnxt-en.git
+[submodule "drivers/8.3/source/chelsio-cxgb4"]
+	path = drivers/8.3/source/chelsio-cxgb4
+	url = git@github.com:xcp-ng-rpms/chelsio-cxgb4.git
+[submodule "drivers/8.3/source/cisco-enic"]
+	path = drivers/8.3/source/cisco-enic
+	url = git@github.com:xcp-ng-rpms/cisco-enic.git
+[submodule "drivers/8.3/source/cisco-fnic"]
+	path = drivers/8.3/source/cisco-fnic
+	url = git@github.com:xcp-ng-rpms/cisco-fnic.git
+[submodule "drivers/8.3/source/dell-rbu-module"]
+	path = drivers/8.3/source/dell-rbu-module
+	url = git@github.com:xcp-ng-rpms/dell-rbu-module.git
+[submodule "drivers/8.3/source/emulex-lpfc"]
+	path = drivers/8.3/source/emulex-lpfc
+	url = git@github.com:xcp-ng-rpms/emulex-lpfc.git
+[submodule "drivers/8.3/source/intel-e1000e"]
+	path = drivers/8.3/source/intel-e1000e
+	url = git@github.com:xcp-ng-rpms/intel-e1000e.git
+[submodule "drivers/8.3/source/intel-fm10k"]
+	path = drivers/8.3/source/intel-fm10k
+	url = git@github.com:xcp-ng-rpms/intel-fm10k.git
+[submodule "drivers/8.3/source/intel-i40e"]
+	path = drivers/8.3/source/intel-i40e
+	url = git@github.com:xcp-ng-rpms/intel-i40e.git
+[submodule "drivers/8.3/source/intel-ice"]
+	path = drivers/8.3/source/intel-ice
+	url = git@github.com:xcp-ng-rpms/intel-ice.git
+[submodule "drivers/8.3/source/intel-igb"]
+	path = drivers/8.3/source/intel-igb
+	url = git@github.com:xcp-ng-rpms/intel-igb.git
+[submodule "drivers/8.3/source/intel-igc"]
+	path = drivers/8.3/source/intel-igc
+	url = git@github.com:xcp-ng-rpms/intel-igc.git
+[submodule "drivers/8.3/source/intel-ixgbe"]
+	path = drivers/8.3/source/intel-ixgbe
+	url = git@github.com:xcp-ng-rpms/intel-ixgbe.git
+[submodule "drivers/8.3/source/mellanox-mlnxen"]
+	path = drivers/8.3/source/mellanox-mlnxen
+	url = git@github.com:xcp-ng-rpms/mellanox-mlnxen.git
+[submodule "drivers/8.3/source/microsemi-aacraid"]
+	path = drivers/8.3/source/microsemi-aacraid
+	url = git@github.com:xcp-ng-rpms/microsemi-aacraid.git
+[submodule "drivers/8.3/source/microsemi-smartpqi"]
+	path = drivers/8.3/source/microsemi-smartpqi
+	url = git@github.com:xcp-ng-rpms/microsemi-smartpqi.git
+[submodule "drivers/8.3/source/mpi3mr-module"]
+	path = drivers/8.3/source/mpi3mr-module
+	url = git@github.com:xcp-ng-rpms/mpi3mr-module.git
+[submodule "drivers/8.3/source/qlogic-fastlinq"]
+	path = drivers/8.3/source/qlogic-fastlinq
+	url = git@github.com:xcp-ng-rpms/qlogic-fastlinq.git
+[submodule "drivers/8.3/source/qlogic-netxtreme2"]
+	path = drivers/8.3/source/qlogic-netxtreme2
+	url = git@github.com:xcp-ng-rpms/qlogic-netxtreme2.git
+[submodule "drivers/8.3/source/qlogic-qla2xxx"]
+	path = drivers/8.3/source/qlogic-qla2xxx
+	url = git@github.com:xcp-ng-rpms/qlogic-qla2xxx.git
+[submodule "drivers/8.3/source/r8125-module"]
+	path = drivers/8.3/source/r8125-module
 	url = git@github.com:xcp-ng-rpms/r8125-module.git
