@@ -473,4 +473,4 @@ wait "${RPMBUILD_PID}" || {
 }
 
 # Workaround `git branch` race condition when it moves the branch reflog.
-flock "${CODE_REPO_PATH}/.git/branch-rename.lock" -c "git -C \"${CODE_REPO_WORKTREE}\" branch -m \"${BRANCH_NAME}-partial\" \"${BRANCH_NAME}\""
+git -C "${CODE_REPO_PATH}" branch -m "${BRANCH_NAME}-partial" "${BRANCH_NAME}"
