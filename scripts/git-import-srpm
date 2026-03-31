@@ -378,7 +378,7 @@ function import_all_branches() {
     done | (SRPM_REPO_PATH="${SRPM_REPO_PATH}" CODE_REPO_PATH="${CODE_REPO_PATH}" xargs -n 1 -P "${nproc}" "${THIS_SCRIPT}")
 }
 
-COMMAND_LOGS=/tmp/git-import-srpm.${1}.debug.log
+COMMAND_LOGS=/tmp/git-import-srpm.${PRODUCT}.${1}.debug.log
 if [[ -f ${COMMAND_LOGS} ]]; then
     rm "${COMMAND_LOGS}"
 fi
