@@ -119,8 +119,14 @@ function get_release() {
 }
 
 function get_full_version() {
-    local base_version="$1"
-    local release="$2"
+    local worktree="$1"
+    local revision="$2"
+
+    local base_version
+    base_version=$(get_base_version "${worktree}" "${revision}")
+
+    local release
+    release="$(get_release "${worktree}" "${revision}")"
 
     local raw_version="${base_version#"${RELEASE_PREFIX}"}"
     raw_version="${raw_version%"${RELEASE_SUFFIX:-}"}"
@@ -143,13 +149,10 @@ function get_branch_name() {
     local worktree="$1"
     local revision="$2"
 
-    base_version=$(get_base_version "${worktree}" "${revision}")
-
-    release="$(get_release "${worktree}" "${revision}")"
-
+    local vendor
     vendor=$(get_vendor "${worktree}" "${revision}")
 
-    full_version="$(get_full_version "${base_version}" "${release}")"
+    full_version="$(get_full_version "${worktree}" "${revision}")"
 
     if [[ -z ${vendor} || -z ${full_version} ]]; then
         echo "unknown_branch_name_for_rev_${revision} vendor=${vendor:-} full_version=${full_version:-}"
