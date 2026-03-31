@@ -34,6 +34,7 @@ THIS_SCRIPT="$(readlink -f "$0")"
 
 SRPM_REPO_PATH=${SRPM_REPO_PATH:-${PWD}}
 PRODUCT="$(basename "${SRPM_REPO_PATH}/SPECS/"*.spec .spec)"
+OOT_DRIVER_IMPORT=${OOT_DRIVER_IMPORT:-}
 CODE_REPO_PATH="${CODE_REPO_PATH:-${SRPM_REPO_PATH}/../${PRODUCT/kernel/linux}/}"
 SPEC_FILE="SPECS/${PRODUCT}.spec"
 if [[ ${PRODUCT} = "kernel" || ${PRODUCT} = "qemu" ]]; then
@@ -44,8 +45,12 @@ elif [[ ${PRODUCT} = "rpm" ]]; then
     RELEASE_PREFIX="rpm-"
     RELEASE_SUFFIX="-release"
 else
-    echo "Unknown package: '${PRODUCT}'"
-    exit 1
+    if [[ -z "${OOT_DRIVER_IMPORT}" ]]; then
+	echo "Unknown package: '${PRODUCT}'"
+	exit 1
+    fi
+    RELEASE_PREFIX=""
+    RELEASE_SUFFIX=""
 fi
 
 GIT_COMMIT_OPTIONS="--no-gpg-sign"
@@ -153,11 +158,16 @@ function init_worktrees() {
     git -C "${SRPM_REPO_PATH}" worktree add --detach "${srpm_repo_worktree}" "${srpm_repo_revision}^0" >> "${COMMAND_LOGS}"
 
     # Upstream stable base
-    base_version=$(get_base_version "${srpm_repo_worktree}" HEAD)
-    if [[ ${PRODUCT} = "xen" ]]; then
-        if [[ ${base_version} = "RELEASE-4.13.0" ]]; then
-            base_version=85e1424de2dda
-        fi
+    local base_version
+    if [[ -z "${OOT_DRIVER_IMPORT}" ]]; then
+	base_version=$(get_base_version "${srpm_repo_worktree}" HEAD)
+	if [[ ${PRODUCT} = "xen" ]]; then
+            if [[ ${base_version} = "RELEASE-4.13.0" ]]; then
+		base_version=85e1424de2dda
+            fi
+	fi
+    else
+	base_version=$(git -C "${CODE_REPO_PATH}" rev-parse "origin/source/8.3^{/Initial commit.}")
     fi
 
     BRANCH_NAME="$(get_branch_name "${srpm_repo_worktree}" HEAD)"
@@ -407,26 +417,28 @@ rpmbuild --nodeps \
          -bp "${SRPM_REPO_WORKTREE}/${SPEC_FILE}" 2>> "${COMMAND_LOGS}" >> "${COMMAND_LOGS}" &
 RPMBUILD_PID=$!
 
-cd "${SRPM_REPO_WORKTREE}"
+if [[ -z "${OOT_DRIVER_IMPORT}" ]]; then
+    cd "${SRPM_REPO_WORKTREE}"
 
-git show "HEAD:${SPEC_FILE}" | while IFS= read -r l; do
-    case "${l}" in
-        Patch*)
-            p="${l#* }"
-            apply_patch "${CODE_REPO_WORKTREE}" "${SRPM_REPO_WORKTREE}/SOURCES/${p}" >> "${COMMAND_LOGS}" 2>> "${COMMAND_LOGS}" || {
-                echo "[-] [apply_patch] Failed reconstructing ${BRANCH_NAME} for ${SRPM_REPO_REVISION}, check ${COMMAND_LOGS}"
-                if [[ -z "${CARRY_ON:-}" ]]; then
-                    exit 1
-                else
-                    git am --abort || :
-                    git reset --hard || :
-                fi
-            }
-            ;;
-        *)
-            ;;
-    esac
-done
+    git show "HEAD:${SPEC_FILE}" | while IFS= read -r l; do
+	case "${l}" in
+            Patch*)
+		p="${l#* }"
+		apply_patch "${CODE_REPO_WORKTREE}" "${SRPM_REPO_WORKTREE}/SOURCES/${p}" >> "${COMMAND_LOGS}" 2>> "${COMMAND_LOGS}" || {
+                    echo "[-] [apply_patch] Failed reconstructing ${BRANCH_NAME} for ${SRPM_REPO_REVISION}, check ${COMMAND_LOGS}"
+                    if [[ -z "${CARRY_ON:-}" ]]; then
+			exit 1
+                    else
+			git am --abort || :
+			git reset --hard || :
+                    fi
+		}
+		;;
+            *)
+		;;
+	esac
+    done
+fi
 
 wait "${RPMBUILD_PID}" || {
     echo "[-] [rpmbuild] Failed reconstructing ${BRANCH_NAME} for ${SRPM_REPO_REVISION}, check ${COMMAND_LOGS}"
@@ -435,7 +447,13 @@ wait "${RPMBUILD_PID}" || {
     build_dir="$(get_build_dir "${SRPM_REPO_WORKTREE}" "${SRPM_REPO_REVISION}")"
     git -C "${CODE_REPO_WORKTREE}" --work-tree "${build_dir}" add -A
     export_author
-    git -C "${CODE_REPO_WORKTREE}" commit ${GIT_COMMIT_OPTIONS} -s --date="${GIT_COMMITTER_DATE}" -m "rpmbuild: remaining diff." 2>> "${COMMAND_LOGS}" >> "${COMMAND_LOGS}" || :
+
+    if [[ -z "${OOT_DRIVER_IMPORT}" ]]; then
+	commit_msg="rpmbuild: remaining diff."
+    else
+	commit_msg="git-import-srpm: import of $(get_full_version "${SRPM_REPO_WORKTREE}" "${SRPM_REPO_REVISION}")"
+    fi
+    git -C "${CODE_REPO_WORKTREE}" commit ${GIT_COMMIT_OPTIONS} -s --date="${GIT_COMMITTER_DATE}" -m "${commit_msg}" 2>> "${COMMAND_LOGS}" >> "${COMMAND_LOGS}" || :
 }
 
 # Workaround `git branch` race condition when it moves the branch reflog.
