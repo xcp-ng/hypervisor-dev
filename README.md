@@ -11,6 +11,8 @@
   - [Pull and get all sub-modules](#pull-and-get-all-sub-modules)
   - [Add the new RPM repo as sub-module](#add-the-new-rpm-repo-as-sub-module)
   - [Refreshing the kabi.locked_list file](#refreshing-the-kabilocked_list-file)
+  - [Add the source sub-module](#add-the-source-sub-module)
+  - [Open your PR](#open-your-pr)
 - [Upgrading kernel to latest upstream](#upgrading-kernel-to-latest-upstream)
   - [Pre-requisites git repositories](#pre-requisites-git-repositories)
   - [Pre-requisites dev tooling](#pre-requisites-dev-tooling)
@@ -67,6 +69,7 @@
   - [Function prototype changes](#function-prototype-changes)
   - [Finalizing](#finalizing)
 - [Development environments](#development-environments)
+
 <!-- markdown-toc end -->
 
 # Introduction
@@ -184,6 +187,52 @@ git add kernel-abis/Modules.kabi-4.19.19
 
 git commit -s -m "kernel-abis: refreshed the list of locked symbols due to <driver_name> addition."
 ```
+
+## Add the source sub-module
+
+In order to be able to analyze and/or modify our driver source code, for
+each driver srpm sub-module in `drivers/8.3/srpm/`, we create a
+corresponding driver source sub-module in `drivers/8.3/source`, with the
+sources checked out to the matching revision in the srpm repository.
+
+> [!NOTE]
+>
+> In order to not duplicate the git repositories, the source and srpm
+> repository are shared, with source branches created by `git-import-srpm`.
+
+```bash
+# First, create an orphan commit for git-import-srpm to work a-top
+cd drivers/8.3/srpm/<driver_name>
+cur_rev=$(git rev-parse HEAD)
+git checkout --orphan source/8.3
+git rm -rf
+git commit --allow-empty "Initial commit."
+git push origin source/8.3
+git checkout ${cur_rev}
+
+# Second, import the sources and take note of the branch created
+OOT_DRIVER_MODE=1 ../../../../scripts/git-import-srpm HEAD
+
+# Push the /source and /patched branches created
+git push origin <branch_created>{patched,source}
+
+# Third, add the sub-module pointing to /patched
+cd -
+git submodule add git@github.com/xcp-ng-rpms/<driver_name>.git drivers/8.3/source/<driver_name>
+cd drivers/8.3/source/<driver_name>
+# The ^0 is to record the commit sha1 as opposed to branch name in .gitmodules
+git checkout <branch_created>^0
+cd -
+
+# And commit
+git commit -s -m "drivers: added source repository for <driver_name>."
+```
+
+## Open your PR
+
+You can now open your PR, which should contain a few commits, one for
+adding the srpm repository sub-module, one for the update of the symbol
+locked list, and one for the source repository sub-module.
 
 # Upgrading kernel to latest upstream
 
