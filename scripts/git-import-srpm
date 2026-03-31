@@ -176,7 +176,11 @@ function init_worktrees() {
 
     if git -C "${CODE_REPO_PATH}" show-ref --verify --quiet "refs/heads/${BRANCH_NAME}"; then
         echo "[-] branch ${BRANCH_NAME} already exists"
-        exit 1
+	if [[ "${FORCE_IMPORT:-}" ]]; then
+	    git branch -D "${BRANCH_NAME}"
+	else
+            exit 1
+	fi
     fi
 
 
