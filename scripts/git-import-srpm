@@ -366,16 +366,28 @@ fi
 SRPM_REPO_REVISION=$1
 
 TMPDIR=$(mktemp -d -t src-import-xen-XXX)
-if [[ -z ${DONT_DELETE_TMP_DIR:-} ]]; then
-    trap '
-test "${RPMBUILD_PID:-}" && kill ${RPMBUILD_PID} || :
-rm -Rf ${TMPDIR:-/a/path/that/does/not/exist}
-cd ${CODE_REPO_PATH}
-git worktree prune
-cd ${SRPM_REPO_PATH}
-git worktree prune
-' EXIT
+trap 'LAST_LINE=$LINENO' DEBUG
+# shellcheck disable=SC2154 # shellcheck is confused and think exit_code is used without being assigned
+trap '
+exit_code=$?
+if [[ ${exit_code} -ne 0 ]]; then
+    echo "Error at line:${LAST_LINE} '\''${BASH_COMMAND}'\'' exited with code ${exit_code}"
+    echo "  Log file: ${COMMAND_LOGS}"
+    if [[ -z "${DONT_DELETE_TMP_DIR:-}" ]]; then
+        echo "  You can re-run the script with DONT_DELETE_TMP_DIR=y to look around in the temporary worktree."
+    else
+        echo "  Temporary worktrees at: ${TMPDIR}"
+    fi
 fi
+if [[ -z "${DONT_DELETE_TMP_DIR:-}" ]]; then
+    test "${RPMBUILD_PID:-}" && kill ${RPMBUILD_PID} || :
+    rm -Rf ${TMPDIR:-/a/path/that/does/not/exist}
+    cd ${CODE_REPO_PATH}
+    git worktree prune
+    cd ${SRPM_REPO_PATH}
+    git worktree prune
+fi
+' EXIT
 
 SRPM_REPO_WORKTREE="${TMPDIR}/srpm"
 CODE_REPO_WORKTREE="${TMPDIR}/code"
