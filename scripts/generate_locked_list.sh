@@ -25,6 +25,11 @@ while [[ $# -gt 0 ]]; do
             SKIP_BUILD=true
             shift
             ;;
+        --append)
+            shift
+            APPEND_DRIVERS="$1"
+            shift
+            ;;
         *)
             OUTPUT_FILE="$1"
             shift
@@ -55,15 +60,42 @@ if [[ "${NO_CHECKS}" == false ]]; then
 fi
 
 if [[ "${SKIP_BUILD}" == false ]]; then
-    git submodule foreach "
-        xcp-ng-dev container build 8.3 ./
-    "
+    #shellcheck disable=SC2016
+    if [[ -z "${APPEND_DRIVERS:-}" ]]; then
+        git submodule foreach '
+            set -eu
+            if [ "$(dirname "${sm_path}")" = "drivers/8.3/srpm" ]; then
+                xcp-ng-dev container build 8.3 ./
+            fi
+        '
+    else
+        for driver_name in ${APPEND_DRIVERS}; do
+            (
+                cd drivers/8.3/srpm/"${driver_name}"
+                xcp-ng-dev container build 8.3 ./
+            )
+        done
+    fi
 fi
 
-git submodule --quiet foreach "
+#shellcheck disable=SC2016
+if [[ -z "${APPEND_DRIVERS:-}" ]]; then
+    git submodule --quiet foreach '
     set -eu
-    echo \"[\$(basename \${name})]\"
-    for module in \$(find ./ -name \\*.ko); do
-    	objdump -t \"\${module}\" | awk '/UND/{print \"\t\" \$NF}'
+    if [ "$(dirname "${sm_path}")" != "drivers/8.3/srpm" ]; then
+        exit 0
+    fi
+    echo "[$(basename ${name})]"
+    for module in $(find ./ -name \*.ko); do
+        objdump -t "${module}" | awk "/UND/{print \"\t\" \$NF}"
     done | sort -u
-" > "${OUTPUT_FILE}"
+    ' > "${OUTPUT_FILE}"
+else
+        for driver_name in ${APPEND_DRIVERS}; do
+            (
+                echo "[${driver_name}]"
+                cd drivers/8.3/srpm/"${driver_name}"
+                find ./ -name \*.ko -exec bash -c 'objdump -t "$1" | awk "/UND/{print \"\t\" \$NF}" | sort -u' bash-subshell {} \;
+            ) >> "${OUTPUT_FILE}"
+        done
+fi
