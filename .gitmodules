@@ -202,3 +202,63 @@
 [submodule "drivers/8.3/srpm/microsemi-smartpqi-alt"]
 	path = drivers/8.3/srpm/microsemi-smartpqi-alt
 	url = git@github.com:xcp-ng-rpms/microsemi-smartpqi-alt.git
+[submodule "drivers/8.3/source/atlantic-module-alt"]
+	path = drivers/8.3/source/atlantic-module-alt
+	url = git@github.com:xcp-ng-rpms/atlantic-module-alt.git
+[submodule "drivers/8.3/source/broadcom-bnxt-en-alt"]
+	path = drivers/8.3/source/broadcom-bnxt-en-alt
+	url = git@github.com:xcp-ng-rpms/broadcom-bnxt-en-alt.git
+[submodule "drivers/8.3/source/cisco-enic-alt"]
+	path = drivers/8.3/source/cisco-enic-alt
+	url = git@github.com:xcp-ng-rpms/cisco-enic-alt.git
+[submodule "drivers/8.3/source/cisco-fnic-alt"]
+	path = drivers/8.3/source/cisco-fnic-alt
+	url = git@github.com:xcp-ng-rpms/cisco-fnic-alt.git
+[submodule "drivers/8.3/source/coretemp-module-alt"]
+	path = drivers/8.3/source/coretemp-module-alt
+	url = git@github.com:xcp-ng-rpms/coretemp-module-alt.git
+[submodule "drivers/8.3/source/emulex-lpfc-alt"]
+	path = drivers/8.3/source/emulex-lpfc-alt
+	url = git@github.com:xcp-ng-rpms/emulex-lpfc-alt.git
+[submodule "drivers/8.3/source/intel-e1000e-alt"]
+	path = drivers/8.3/source/intel-e1000e-alt
+	url = git@github.com:xcp-ng-rpms/intel-e1000e-alt.git
+[submodule "drivers/8.3/source/intel-i40e-alt"]
+	path = drivers/8.3/source/intel-i40e-alt
+	url = git@github.com:xcp-ng-rpms/intel-i40e-alt.git
+[submodule "drivers/8.3/source/intel-ice-alt"]
+	path = drivers/8.3/source/intel-ice-alt
+	url = git@github.com:xcp-ng-rpms/intel-ice-alt.git
+[submodule "drivers/8.3/source/intel-igb-alt"]
+	path = drivers/8.3/source/intel-igb-alt
+	url = git@github.com:xcp-ng-rpms/intel-igb-alt.git
+[submodule "drivers/8.3/source/intel-ixgbe-alt"]
+	path = drivers/8.3/source/intel-ixgbe-alt
+	url = git@github.com:xcp-ng-rpms/intel-ixgbe-alt.git
+[submodule "drivers/8.3/source/mellanox-mlnxen-alt"]
+	path = drivers/8.3/source/mellanox-mlnxen-alt
+	url = git@github.com:xcp-ng-rpms/mellanox-mlnxen-alt.git
+[submodule "drivers/8.3/source/microsemi-smartpqi-alt"]
+	path = drivers/8.3/source/microsemi-smartpqi-alt
+	url = git@github.com:xcp-ng-rpms/microsemi-smartpqi-alt.git
+[submodule "drivers/8.3/source/mlx4-modules-alt"]
+	path = drivers/8.3/source/mlx4-modules-alt
+	url = git@github.com:xcp-ng-rpms/mlx4-modules-alt.git
+[submodule "drivers/8.3/source/qlogic-fastlinq-alt"]
+	path = drivers/8.3/source/qlogic-fastlinq-alt
+	url = git@github.com:xcp-ng-rpms/qlogic-fastlinq-alt.git
+[submodule "drivers/8.3/source/qlogic-netxtreme2-alt"]
+	path = drivers/8.3/source/qlogic-netxtreme2-alt
+	url = git@github.com:xcp-ng-rpms/qlogic-netxtreme2-alt.git
+[submodule "drivers/8.3/source/qlogic-qla2xxx-alt"]
+	path = drivers/8.3/source/qlogic-qla2xxx-alt
+	url = git@github.com:xcp-ng-rpms/qlogic-qla2xxx-alt.git
+[submodule "drivers/8.3/source/r8169-module-alt"]
+	path = drivers/8.3/source/r8169-module-alt
+	url = git@github.com:xcp-ng-rpms/r8169-module-alt.git
+[submodule "drivers/8.3/source/sfc-module-alt"]
+	path = drivers/8.3/source/sfc-module-alt
+	url = git@github.com:xcp-ng-rpms/sfc-module-alt.git
+[submodule "drivers/8.3/source/tg3-module-alt"]
+	path = drivers/8.3/source/tg3-module-alt
+	url = git@github.com:xcp-ng-rpms/tg3-module-alt.git
