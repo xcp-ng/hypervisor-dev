@@ -98,3 +98,18 @@ def patchids(
 
 def abbrev(oid: pygit2.Oid):
     return str(oid)[:12]
+
+
+def commit_touches_paths(commit: pygit2.Commit, paths: list[str]) -> bool:
+    """Return True if the commit modifies any file under the given paths."""
+    if not paths:
+        return True
+    if not commit.parents:
+        diff = commit.tree.diff_to_tree()
+    else:
+        diff = commit.parents[0].tree.diff_to_tree(commit.tree)
+    for delta in diff.deltas:
+        for path in paths:
+            if delta.new_file.path.startswith(path) or delta.old_file.path.startswith(path):
+                return True
+    return False

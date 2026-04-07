@@ -6,7 +6,7 @@ from collections import OrderedDict
 import pygit2
 
 from .constants import CacheFlags
-from .git_utils import commit_title, is_ancestor, oid, patchids, range_log
+from .git_utils import commit_title, commit_touches_paths, is_ancestor, oid, patchids, range_log
 
 
 class BranchRange:
@@ -55,10 +55,14 @@ class BranchRange:
         for commit in range_log(
             self._repo, self.merge_base or self.start_range_oid, oid(self._repo, self.end_range)
         ):
-            self._commit_by_title[commit_title(commit)] = commit
-            self._commit_by_oid[commit.id] = commit
             if self.merge_base is not None and commit.id == self.start_range_oid:
                 passed_upstream = True
+
+            if not commit_touches_paths(commit, self.args.paths):
+                continue
+
+            self._commit_by_title[commit_title(commit)] = commit
+            self._commit_by_oid[commit.id] = commit
             if not passed_upstream:
                 self._rebased_commits[commit.id] = commit
 

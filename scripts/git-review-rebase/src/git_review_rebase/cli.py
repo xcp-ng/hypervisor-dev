@@ -33,6 +33,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("left_range", help="Left range in format: base..branch")
     parser.add_argument("right_range", help="Right range in format: base..branch")
+    parser.add_argument(
+        "paths", nargs="*", metavar="PATH", help="Limit to commits touching these paths"
+    )
     args = parser.parse_args()
 
     args.repository = os.path.expanduser(args.repository)
