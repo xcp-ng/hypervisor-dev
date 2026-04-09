@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Baptiste Le Duc <baptiste.leduc@etik.com>
+# SPDX-License-Identifier: GPL-2.0
+
+# ==============================================================================
+# Local paths configuration — copy this file to config.mk and adapt.
+# config.mk is gitignored: each developer maintains their own copy.
+# ==============================================================================
+
+# Path to the Xen source tree on your machine (required)
+XEN_HOST := $(HOME)/Documents/Vates/xen
+
+# Docker image to use (optional, defaults to baptleduc/xen-riscv64-trixie:latest).
+# Override to use a locally built image (e.g. after make build-image).
+# IMAGE := xen-riscv64-trixie:debug
+
+# Linux Kernel binary to use (optional, defaults to baptleduc/xen-riscv64-kernel:6.18).
+# When set, overrides the pre-compiled kernel bundled in the Docker image.
+# KERNEL := $(HOME)/Documents/Vates/linux-fork/arch/riscv/boot/Image.gz
+
+# Path to the kernel debug symbol file (optional).
+# When set, enables Linux kernel symbol loading in GDB (gdb/gdb-rebuild targets).
+# VMLINUX := $(HOME)/Documents/Vates/linux-fork/vmlinux
