@@ -66,7 +66,7 @@
     - [That does change subsequent values](#that-does-change-subsequent-values)
   - [Function prototype changes](#function-prototype-changes)
   - [Finalizing](#finalizing)
-
+- [Development environments](#development-environments)
 <!-- markdown-toc end -->
 
 # Introduction
@@ -2077,3 +2077,12 @@ From this point, you can follow our regular process to make a kernel release.
 > [!NOTE]
 >
 > [TODO] Add link to instruction on our process
+
+# Development environments
+
+Docker-based environments for building and running hypervisor components
+are available under `docker/`:
+
+| Path                                                       | Description       |
+|------------------------------------------------------------|-------------------|
+| [`docker/riscv/trixie/`](docker/riscv/trixie/README.md)   | Xen RISC-V 64-bit |

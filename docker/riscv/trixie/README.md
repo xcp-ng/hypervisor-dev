@@ -1,4 +1,4 @@
-# xen-riscv64-trixie — Xen RISC-V Dev Environment
+# xen-riscv64-trixie
 
 Docker-based build and run environment for the Xen hypervisor on RISC-V 64-bit.
 Targets QEMU `virt` with APLIC/IMSIC interrupt controllers.
