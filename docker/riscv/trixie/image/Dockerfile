@@ -43,7 +43,7 @@ LABEL org.opencontainers.image.title="xen-riscv64-trixie" \
       org.opencontainers.image.source="https://github.com/xcp-ng/hypervisor-dev/docker/riscv/trixie"
 
 # Directory layout
-ENV BINARIES_DIR=/bin
+ENV ARTIFACTS_DIR=/artifacts
 ENV BUILD_DIR=/build
 ENV DTB_DIR=/build/dtb
 ENV CONFIGS_DIR=/build/configs
@@ -122,10 +122,10 @@ RUN mkdir -p ${TMP_DOMU_INITRD_DIR}/bin ${TMP_DOMU_INITRD_DIR}/sbin \
 
 # External binaries
 COPY --from=kernel-riscv64 \
-    /Image.gz ${BINARIES_DIR}/Image.gz
+    /Image.gz ${ARTIFACTS_DIR}/Image.gz
 
 COPY --from=qemu-aia-riscv64 \
-    /qemu-system-riscv64 /opensbi-riscv64-generic-fw_dynamic.bin ${BINARIES_DIR}/
+    /qemu-system-riscv64 /opensbi-riscv64-generic-fw_dynamic.bin ${ARTIFACTS_DIR}/
 
 # Local files
 COPY config_tools.status config_xen.status xl.conf domu.cfg ${CONFIGS_DIR}/
@@ -133,6 +133,6 @@ COPY Makefile .
 COPY generate_dtb.sh ${DTB_DIR}/
 
 # Set permissions
-RUN chmod -R 755 ${BINARIES_DIR} && chown -R user:user ${BUILD_DIR}
+RUN chmod -R 755 ${ARTIFACTS_DIR} && chown -R user:user ${BUILD_DIR}
 
 USER user

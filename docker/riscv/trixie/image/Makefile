@@ -6,9 +6,9 @@ nproc ?= $(shell nproc)
 LINUX_ROOT?=$(BUILD_DIR)/linux
 OPENSBI_ROOT?=$(BUILD_DIR)/opensbi
 
-QEMU?=$(BINARIES_DIR)/qemu-system-riscv64
-OPENSBI?=$(BINARIES_DIR)/opensbi-riscv64-generic-fw_dynamic.bin
-KERNEL?=$(BINARIES_DIR)/Image.gz
+QEMU?=$(ARTIFACTS_DIR)/qemu-system-riscv64
+OPENSBI?=$(ARTIFACTS_DIR)/opensbi-riscv64-generic-fw_dynamic.bin
+KERNEL?=$(ARTIFACTS_DIR)/Image.gz
 
 INITRD?=$(BUILD_DIR)/initrd.img
 DTB_SCRIPT?=$(DTB_DIR)/generate_dtb.sh
