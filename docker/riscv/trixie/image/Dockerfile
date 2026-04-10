@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Baptiste Le Duc <baptiste.leduc@etik.com>
+# SPDX-FileCopyrightText: 2026 Baptiste Le Duc <baptiste.le-duc@vates.tech>
 # SPDX-License-Identifier: GPL-2.0
 
 # syntax=docker/dockerfile:1
@@ -38,7 +38,7 @@ RUN \
 FROM debian:trixie-slim
 
 LABEL org.opencontainers.image.title="xen-riscv64-trixie" \
-      org.opencontainers.image.authors="Baptiste Le Duc <baptiste.leduc@etik.com>" \
+      org.opencontainers.image.authors="Baptiste Le Duc <baptiste.le-duc@vates.tech>" \
       org.opencontainers.image.licenses="GPL-2.0" \
       org.opencontainers.image.source="https://github.com/xcp-ng/hypervisor-dev/docker/riscv/trixie"
 
