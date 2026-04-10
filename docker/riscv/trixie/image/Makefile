@@ -52,8 +52,7 @@ ifndef VMLINUX
 GDB_ARGS += \
 	-ex "file $(XEN_SYMBOL)" \
 	-ex "directory $(XEN_ROOT)"
-endif
-ifdef VMLINUX
+else
 GDB_ARGS += \
 	-ex "file $(VMLINUX)" \
 	-ex "directory $(XEN_ROOT)" \
