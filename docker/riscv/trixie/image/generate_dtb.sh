@@ -154,6 +154,7 @@ parse_config_file() {
         key=$(echo "$line" | cut -d '=' -f 1)
         value=$(echo "$line" | cut -d '=' -f 2-)
 
+        # Remove trailing spaces and quotes with xargs
         key=$(echo "$key" | xargs)
         value=$(echo "$value" | xargs)
 
