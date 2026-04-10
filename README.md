@@ -91,14 +91,14 @@ released package (qemu, xen, linux), a corresponding source branch is
 created in the form:
 
 ```
-<product>/xcpng-<version>-<release>/base
+<product>/xcpng-<version>-<release>/patched
 ```
 
-Where product would be `kernel` for the Linux kernel, e.g.: `kernel/xcpng-4.19.325-cip129.8.0.44.1/base`.
+Where product would be `kernel` for the Linux kernel, e.g.: `kernel/xcpng-4.19.325-cip129.8.0.44.1/patched`.
 
-For each `/base` branch, a corresponding `/pre-base` branch is created from
-the upstream point where the patch-queue of our SRPM was applied onto.  As
-such, our patch-queue can be found with the range `/pre-base../base`.
+For each `/patched` branch, a corresponding `/source` branch is created
+from the upstream point where the patch-queue of our SRPM was applied onto.
+As such, our patch-queue can be found with the range `/source../patched`.
 
 The branches are created by the
 [git-import-srpm](./scripts/git-import-srpm) script run from within the
@@ -214,17 +214,17 @@ sudo apt-get install rpm
 ## Rebase the kernel to latest upstream
 
 Find the last branch that was released,
-e.g. `kernel/xcpng-4.19.19-8.0.44.1/base`, we'll use it as the source of
+e.g. `kernel/xcpng-4.19.19-8.0.44.1/patched`, we'll use it as the source of
 the rebased commits:
 
 ```bash
 cd /path/to/source/repo
 
 # Last released branch
-prev_branch=$(git branch -r --list origin/kernel/xcpng\*/base | sort -V | tail -n 1)
+prev_branch=$(git branch -r --list origin/kernel/xcpng\*/patched | sort -V | tail -n 1)
 
 # Extra ^0 suffix to reference the commit and make sure original branch isn't updated
-git rebase ${prev_branch%/base}/pre-base ${prev_branch}^0 --onto v4.19.325
+git rebase ${prev_branch%/patched}/source ${prev_branch}^0 --onto v4.19.325
 ```
 
 > [!NOTE]
@@ -604,13 +604,13 @@ cherry-pick such a commit and integrate it into our patch-queue.
 
 ## Cherry-pick the commit
 
-Find the latest `/base` branch and create a working branch on top of it:
+Find the latest `/patched` branch and create a working branch on top of it:
 
 ```bash
 cd /path/to/source/repo
 
-base_branch=$(git branch -r --list origin/kernel/xcpng\*/base | sort -V | tail -n 1)
-git checkout -B <your-name>/add-<short-description> ${base_branch}
+patched_branch=$(git branch -r --list origin/kernel/xcpng\*/patched | sort -V | tail -n 1)
+git checkout -B <your-name>/add-<short-description> ${patched_branch}
 ```
 
 Cherry-pick the upstream commit (make sure to use -x):
