@@ -70,12 +70,14 @@ $(XEN_CONFIGURE_OUT): $(XEN_ROOT)/configure
 $(XEN_CONFIG):
 	cp $(CONFIGS_DIR)/.config $(XEN_CONFIG)
 
-# Dist targets build and install inside the `/dist` directory of the Xen source tree.
+# Uses the Xen top-level dist-tools (no -j bypass): replicating it requires
+# running install-tools-public-headers first, which adds complexity.
 dist-tools: $(XEN_CONFIGURE_OUT) ## Build and install Xen tools to /dist
 	$(XEN_MAKE) dist-tools
 
+# Use sub-make to preserve parallel build (-j$(nproc) not propagated by top-level Xen build)
 dist-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build and install Xen hypervisor to /dist
-	$(XEN_MAKE) dist-xen
+	$(MAKE) -C $(XEN_ROOT)/xen install DESTDIR=$(XEN_ROOT)/dist/install -j$(nproc)
 
 dist: dist-tools dist-xen ## Build and install both tools and Xen to /dist
 
@@ -142,11 +144,13 @@ initrd-tools: dist-tools create-tools-dirs ## Create initrd with Xen tools inclu
 	cp $(RCS_FILE) $(INITRD_DIR)/etc/init.d/
 	genext2fs -b 200000 -N 1444 -U -d $(INITRD_DIR)/ $(INITRD)
 
+# Uses the Xen top-level build-tools (no -j bypass): same rationale as dist-tools.
 build-tools: $(XEN_CONFIGURE_OUT) ## Build Xen tools
 	$(XEN_MAKE) build-tools
 
+# Use sub-make to preserve parallel build (-j$(nproc) not propagated by top-level Xen build)
 build-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build Xen hypervisor
-	$(XEN_MAKE) build-xen
+	$(MAKE) -C $(XEN_ROOT)/xen -j$(nproc)
 
 build: build-tools build-xen ## Build both Xen tools and hypervisor
 
