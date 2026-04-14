@@ -16,20 +16,13 @@ DTB_SCRIPT?=$(DTB_DIR)/generate_dtb.sh
 XEN_ROOT?=$(BUILD_DIR)/xen
 XEN_BIN?=$(XEN_ROOT)/xen/xen
 XEN_SYMBOL?=$(XEN_ROOT)/xen/xen-syms
+XEN_CONFIG?=$(XEN_ROOT)/xen/.config
+XEN_CONFIGURE_OUT := $(XEN_ROOT)/config/Paths.mk
 
 GDB?=/usr/bin/gdb-multiarch
 
 INITRD_STAMP := .stamp_initrd_with_tools
 XEN_MAKE := $(MAKE) -C $(XEN_ROOT) -j$(nproc)
-
-TOOLS_CONFIG = \
-	cp $(CONFIGS_DIR)/config_tools.status $(XEN_ROOT)/tools/config.status && \
-	cp $(CONFIGS_DIR)/Paths.mk $(XEN_ROOT)/config/Paths.mk && \
-	cd $(XEN_ROOT)/tools && bash ./config.status
-
-XEN_CONFIG = \
-	cp $(CONFIGS_DIR)/config_xen.status $(XEN_ROOT)/config.status && \
-	cd $(XEN_ROOT) && bash ./config.status
 
 QEMU_BASE_FLAGS = \
 	-M virt,aclint=off,aia=aplic-imsic,aia-guests=7 \
@@ -71,13 +64,17 @@ help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*##"}; {printf "  %-16s %s\n", $$1, $$2}'
 
+$(XEN_CONFIGURE_OUT): $(XEN_ROOT)/configure
+	cd $(XEN_ROOT) && ./configure --host=riscv64-linux-gnu
+
+$(XEN_CONFIG):
+	cp $(CONFIGS_DIR)/.config $(XEN_CONFIG)
+
 # Dist targets build and install inside the `/dist` directory of the Xen source tree.
-dist-tools: ## Build and install Xen tools to /dist
-	$(TOOLS_CONFIG)
+dist-tools: $(XEN_CONFIGURE_OUT) ## Build and install Xen tools to /dist
 	$(XEN_MAKE) dist-tools
 
-dist-xen: ## Build and install Xen hypervisor to /dist
-	$(XEN_CONFIG)
+dist-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build and install Xen hypervisor to /dist
 	$(XEN_MAKE) dist-xen
 
 dist: dist-tools dist-xen ## Build and install both tools and Xen to /dist
@@ -85,7 +82,7 @@ dist: dist-tools dist-xen ## Build and install both tools and Xen to /dist
 clean: ## Clean build artifacts (distclean)
 	$(XEN_MAKE) distclean
 
-$(INITRD_STAMP): 
+$(INITRD_STAMP):
 	touch $(INITRD_STAMP)
 
 create-tools-dirs: create-common-dirs
@@ -144,13 +141,11 @@ initrd-tools: dist-tools create-tools-dirs ## Create initrd with Xen tools inclu
 	chmod +x $(RCS_FILE)
 	cp $(RCS_FILE) $(INITRD_DIR)/etc/init.d/
 	genext2fs -b 200000 -N 1444 -U -d $(INITRD_DIR)/ $(INITRD)
-	
-build-tools: ## Build Xen tools
-	$(TOOLS_CONFIG)
+
+build-tools: $(XEN_CONFIGURE_OUT) ## Build Xen tools
 	$(XEN_MAKE) build-tools
 
-build-xen: ## Build Xen hypervisor
-	$(XEN_CONFIG)
+build-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build Xen hypervisor
 	$(XEN_MAKE) build-xen
 
 build: build-tools build-xen ## Build both Xen tools and hypervisor
