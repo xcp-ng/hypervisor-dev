@@ -175,4 +175,9 @@ gdb: $(GDB) ## Attach GDB to a running Xen instance
 # --- Clean ---
 
 clean: ## Clean build artifacts (distclean)
+	@if [ -f "$(XEN_CONFIGURE_OUT)" ]; then \
+		rm -f "$(XEN_CONFIGURE_OUT)"; \
+		echo "WARNING: removed $(XEN_CONFIGURE_OUT)"; \
+		echo "WARNING: next builds will use the Docker image defaults (.config and ./configure output)"; \
+	fi
 	$(XEN_MAKE) distclean

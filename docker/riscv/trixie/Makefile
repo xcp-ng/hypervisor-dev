@@ -45,7 +45,7 @@ ifneq ($(filter $(INITRD),$(VALID_INITRD)),$(INITRD))
 $(error INITRD must be one of: $(VALID_INITRD) (got '$(INITRD)'))
 endif
 
-.PHONY: help setup build-image shell run run-rebuild debug debug-rebuild gdb gdb-rebuild
+.PHONY: help setup build-image shell run run-rebuild debug debug-rebuild gdb gdb-rebuild clean
 
 help: ## Show this help message
 	@echo "Targets:"
@@ -100,3 +100,6 @@ ifndef VMLINUX
 endif
 	$(DOCKER) --network host $(IMAGE) \
 		/bin/bash -c "make build-xen && make gdb GDB_FLAGS=-tui"
+
+clean: ## Clean all Xen build artifacts (distclean)
+	$(DOCKER) $(IMAGE) /bin/bash -c "make clean"
