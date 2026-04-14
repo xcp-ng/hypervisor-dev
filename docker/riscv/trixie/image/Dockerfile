@@ -129,7 +129,7 @@ COPY --from=qemu-aia-riscv64 \
     /qemu-system-riscv64 /opensbi-riscv64-generic-fw_dynamic.bin ${ARTIFACTS_DIR}/
 
 # Local files
-COPY config_tools.status config_xen.status xl.conf domu.cfg ${CONFIGS_DIR}/
+COPY config_tools.status config_xen.status xl.conf domu.cfg Paths.mk ${CONFIGS_DIR}/
 COPY Makefile .
 COPY generate_dtb.sh ${DTB_DIR}/
 

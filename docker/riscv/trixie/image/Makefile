@@ -24,6 +24,7 @@ XEN_MAKE := $(MAKE) -C $(XEN_ROOT) -j$(nproc)
 
 TOOLS_CONFIG = \
 	cp $(CONFIGS_DIR)/config_tools.status $(XEN_ROOT)/tools/config.status && \
+	cp $(CONFIGS_DIR)/Paths.mk $(XEN_ROOT)/config/Paths.mk && \
 	cd $(XEN_ROOT)/tools && bash ./config.status
 
 XEN_CONFIG = \
