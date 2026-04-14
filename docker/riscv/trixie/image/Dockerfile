@@ -74,7 +74,7 @@ DEPS=(
     # Xen build
     bison build-essential checkpolicy flex gcc-riscv64-linux-gnu
     # Cross-compiled libs
-    zlib1g-dev:riscv64 libyajl-dev:riscv64 uuid-dev:riscv64 libfdt-dev:riscv64
+    zlib1g-dev:riscv64 libyajl-dev:riscv64 uuid-dev:riscv64 libfdt-dev:riscv64 libyaml-0-2:riscv64
     libncurses-dev:riscv64 python3-dev:riscv64 python3-setuptools:riscv64
     # Tools
     wget curl ca-certificates automake genext2fs
@@ -96,7 +96,8 @@ RUN mkdir -p lib && \
                /usr/lib/riscv64-linux-gnu/libncurses.so.6 \
                /usr/lib/riscv64-linux-gnu/libz.so.1 \
                /usr/lib/riscv64-linux-gnu/libfdt.so.1 \
-               /usr/lib/riscv64-linux-gnu/libyajl.so.2; do \
+               /usr/lib/riscv64-linux-gnu/libyajl.so.2 \
+               /usr/lib/riscv64-linux-gnu/libgcc_s.so.1; do \
         cp "$lib" ./lib/; \
     done
 

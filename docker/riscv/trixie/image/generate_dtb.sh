@@ -177,11 +177,13 @@ parse_config_file() {
 }
 
 case "${TEST_CASE}" in
-    "dom0-test" | "dom0-smp-test")
+    "dom0-test" | "dom0-smp-test" | "dom0-domU-test")
         if [ "$TEST_CASE" = "dom0-smp-test" ]; then
             PLATFORM_PCPU_NUM=4
         elif [ "$TEST_CASE" = "dom0-test" ]; then
             PLATFORM_PCPU_NUM=1
+        elif [ "$TEST_CASE" = "dom0-domU-test" ]; then
+            PLATFORM_PCPU_NUM=2
         fi
 
         CONFIG_FILE="dom0.conf"

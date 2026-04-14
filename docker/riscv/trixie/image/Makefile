@@ -93,6 +93,7 @@ create-tools-dirs: create-common-dirs
 	mkdir -p $(INITRD_DIR)/var/run/xen
 	mkdir -p $(INITRD_DIR)/var/lib/xen
 	mkdir -p $(INITRD_DIR)/var/lock
+	mkdir -p $(INITRD_DIR)/var/log/xen
 	mkdir -p $(INITRD_DIR)/domu
 	cp $(CONFIGS_DIR)/xl.conf $(INITRD_DIR)/etc/xen/
 	cp $(CONFIGS_DIR)/domu.cfg $(INITRD_DIR)/domu/
@@ -130,8 +131,12 @@ initrd-tools: dist-tools create-tools-dirs ## Create initrd with Xen tools inclu
 	'echo "Hello RISC-V World!"' \
 	'mount -t proc proc /proc' \
 	'mount -t xenfs xenfs /proc/xen' \
+	'mkdir -p /dev/pts/' \
+	'mount -t devpts devpts /dev/pts' \
 	'mount -t sysfs sysfs /sys' \
+	'export LIBXL_DEBUG_DUMP_DTB="/var/log/xen/debug_dump_dt.dtb"' \
 	'./dist/install/usr/local/sbin/xenstored' \
+	'./dist/install/usr/local/sbin/xenconsoled' \
 	'sleep 1' \
 	'./lib/xen/bin/xen-init-dom0' \
 	'exec /bin/sh' \
@@ -152,12 +157,12 @@ build: build-tools build-xen ## Build both Xen tools and hypervisor
 
 go: $(INITRD) $(KERNEL) $(QEMU) $(OPENSBI) $(XEN_BIN) $(DTB_SCRIPT) ## Launch Xen with dom0 in QEMU
 	cd $(DTB_DIR) && \
-	bash $(DTB_SCRIPT) dom0-test $(DTB_DIR) $(OPENSBI) $(QEMU) $(XEN_BIN) $(KERNEL) $(INITRD)
+	bash $(DTB_SCRIPT) dom0-domU-test $(DTB_DIR) $(OPENSBI) $(QEMU) $(XEN_BIN) $(KERNEL) $(INITRD)
 	$(QEMU) $(QEMU_BASE_FLAGS)
 
 go-debug: $(INITRD) $(KERNEL) $(QEMU) $(OPENSBI) $(XEN_BIN) $(DTB_SCRIPT) ## Launch Xen in QEMU with GDB server waiting on port 1234
 	cd $(DTB_DIR) && \
-	bash $(DTB_SCRIPT) dom0-test $(DTB_DIR) $(OPENSBI) $(QEMU) $(XEN_BIN) $(KERNEL) $(INITRD)
+	bash $(DTB_SCRIPT) dom0-domU-test $(DTB_DIR) $(OPENSBI) $(QEMU) $(XEN_BIN) $(KERNEL) $(INITRD)
 	$(QEMU) $(QEMU_BASE_FLAGS) $(QEMU_DEBUG_FLAGS)
 
 gdb: $(GDB) ## Attach GDB to a running Xen instance
