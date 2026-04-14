@@ -64,28 +64,24 @@ help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*##"}; {printf "  %-16s %s\n", $$1, $$2}'
 
+# --- Internal targets ---
+
 $(XEN_CONFIGURE_OUT): $(XEN_ROOT)/configure
 	cd $(XEN_ROOT) && ./configure --host=riscv64-linux-gnu
 
 $(XEN_CONFIG):
 	cp $(CONFIGS_DIR)/.config $(XEN_CONFIG)
 
-# Uses the Xen top-level dist-tools (no -j bypass): replicating it requires
-# running install-tools-public-headers first, which adds complexity.
-dist-tools: $(XEN_CONFIGURE_OUT) ## Build and install Xen tools to /dist
-	$(XEN_MAKE) dist-tools
-
-# Use sub-make to preserve parallel build (-j$(nproc) not propagated by top-level Xen build)
-dist-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build and install Xen hypervisor to /dist
-	$(MAKE) -C $(XEN_ROOT)/xen install DESTDIR=$(XEN_ROOT)/dist/install -j$(nproc)
-
-dist: dist-tools dist-xen ## Build and install both tools and Xen to /dist
-
-clean: ## Clean build artifacts (distclean)
-	$(XEN_MAKE) distclean
-
 $(INITRD_STAMP):
 	touch $(INITRD_STAMP)
+
+create-common-dirs:
+	mkdir -p $(INITRD_DIR)/dev
+	mkdir -p $(INITRD_DIR)/dist
+	mkdir -p $(INITRD_DIR)/proc
+	mkdir -p $(INITRD_DIR)/sys
+	mkdir -p $(INITRD_DIR)/etc/init.d
+	mkdir -p $(INITRD_DIR)/etc/xen
 
 create-tools-dirs: create-common-dirs
 	mkdir -p $(INITRD_DIR)/var/run/xenstored
@@ -99,13 +95,30 @@ create-tools-dirs: create-common-dirs
 	cp $(KERNEL) $(INITRD_DIR)/domu/
 	cp $(DOMU_INITRD_IMG) $(INITRD_DIR)/domu/initrd.img
 
-create-common-dirs:
-	mkdir -p $(INITRD_DIR)/dev
-	mkdir -p $(INITRD_DIR)/dist
-	mkdir -p $(INITRD_DIR)/proc
-	mkdir -p $(INITRD_DIR)/sys
-	mkdir -p $(INITRD_DIR)/etc/init.d
-	mkdir -p $(INITRD_DIR)/etc/xen
+# --- Build targets ---
+
+# Uses the Xen top-level dist-tools (no -j bypass): replicating it requires
+# running install-tools-public-headers first, which adds complexity.
+dist-tools: $(XEN_CONFIGURE_OUT) ## Build and install Xen tools to /dist
+	$(XEN_MAKE) dist-tools
+
+# Use sub-make to preserve parallel build (-j$(nproc) not propagated by top-level Xen build)
+dist-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build and install Xen hypervisor to /dist
+	$(MAKE) -C $(XEN_ROOT)/xen install DESTDIR=$(XEN_ROOT)/dist/install -j$(nproc)
+
+dist: dist-tools dist-xen ## Build and install both tools and Xen to /dist
+
+# Uses the Xen top-level build-tools (no -j bypass): same rationale as dist-tools.
+build-tools: $(XEN_CONFIGURE_OUT) ## Build Xen tools
+	$(XEN_MAKE) build-tools
+
+# Use sub-make to preserve parallel build (-j$(nproc) not propagated by top-level Xen build)
+build-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build Xen hypervisor
+	$(MAKE) -C $(XEN_ROOT)/xen -j$(nproc)
+
+build: build-tools build-xen ## Build both Xen tools and hypervisor
+
+# --- Initrd targets ---
 
 initrd: $(INITRD_STAMP) create-common-dirs ## Create basic initrd image
 	echo "Building initrd image"
@@ -144,15 +157,7 @@ initrd-tools: dist-tools create-tools-dirs ## Create initrd with Xen tools inclu
 	cp $(RCS_FILE) $(INITRD_DIR)/etc/init.d/
 	genext2fs -b 200000 -N 1444 -U -d $(INITRD_DIR)/ $(INITRD)
 
-# Uses the Xen top-level build-tools (no -j bypass): same rationale as dist-tools.
-build-tools: $(XEN_CONFIGURE_OUT) ## Build Xen tools
-	$(XEN_MAKE) build-tools
-
-# Use sub-make to preserve parallel build (-j$(nproc) not propagated by top-level Xen build)
-build-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build Xen hypervisor
-	$(MAKE) -C $(XEN_ROOT)/xen -j$(nproc)
-
-build: build-tools build-xen ## Build both Xen tools and hypervisor
+# --- Run targets ---
 
 go: $(INITRD) $(KERNEL) $(QEMU) $(OPENSBI) $(XEN_BIN) $(DTB_SCRIPT) ## Launch Xen with dom0 in QEMU
 	cd $(DTB_DIR) && \
@@ -166,3 +171,8 @@ go-debug: $(INITRD) $(KERNEL) $(QEMU) $(OPENSBI) $(XEN_BIN) $(DTB_SCRIPT) ## Lau
 
 gdb: $(GDB) ## Attach GDB to a running Xen instance
 	$(GDB) $(GDB_FLAGS) $(GDB_ARGS)
+
+# --- Clean ---
+
+clean: ## Clean build artifacts (distclean)
+	$(XEN_MAKE) distclean
