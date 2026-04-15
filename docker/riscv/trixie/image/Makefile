@@ -147,9 +147,10 @@ initrd-tools: dist-tools create-tools-dirs ## Create initrd with Xen tools inclu
 	'mount -t devpts devpts /dev/pts' \
 	'mount -t sysfs sysfs /sys' \
 	'export LIBXL_DEBUG_DUMP_DTB="/var/log/xen/debug_dump_dt.dtb"' \
-	'./dist/install/usr/local/sbin/xenstored' \
-	'./dist/install/usr/local/sbin/xenconsoled' \
-	'sleep 1' \
+	'export PATH=$$PATH:/dist/install/usr/local/sbin' \
+	'xenstored' \
+	'xenconsoled' \
+	'sleep 0.5' \
 	'./lib/xen/bin/xen-init-dom0' \
 	'exec /bin/sh' \
 	> $(RCS_FILE) && \
