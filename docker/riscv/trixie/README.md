@@ -106,6 +106,14 @@ make run
 
 ### Boot Xen with a locally built kernel
 
+Build the kernel from [`baptleduc/linux-xen-riscv`](https://github.com/baptleduc/linux-xen-riscv/tree/6.18-xen-guest-support):
+
+```sh
+make ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- -j$(nproc) xen_defconfig Image.gz
+```
+
+Then set `KERNEL` in `config.mk` and run:
+
 ```sh
 # In config.mk:
 # KERNEL := $(HOME)/path/to/linux/arch/riscv/boot/Image.gz
