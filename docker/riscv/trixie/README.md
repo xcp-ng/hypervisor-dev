@@ -11,9 +11,15 @@ boot Xen without a local Linux build.
 
 - Docker
 - QEMU user-space emulators registered with `binfmt_misc` (see [First-time setup](#first-time-setup))
-- Xen source tree from the [`dev-riscv-support-guest-domains`](https://gitlab.com/xen-project/people/olkur/xen/-/tree/dev-riscv-support-guest-domains?ref_type=heads) branch
+- Xen source tree from the [`dev-riscv-support-guest-domains`](https://gitlab.com/xen-project/people/olkur/xen/-/tree/dev-riscv-support-guest-domains?ref_type=heads) branch.
 
 > **Note:** domU support is a work in progress. Currently only booting dom0 and running `xl info` / `xl list` are operational.
+
+> [!WARNING]
+> The Xen source tree must be on a branch with RISC-V support and have a **clean working tree**.
+> Stale build artifacts or configuration files from a different branch can cause build failures.
+> If you suspect a dirty state, you can run `make clean` to remove generated configuration files,
+> so the next build will reconfigure from scratch. **Not recommended unless necessary**.
 
 ## First-time setup
 
@@ -68,6 +74,7 @@ make <target> [INITRD=initrd|initrd-tools]
 | `debug-rebuild` | Rebuild Xen, then boot in GDB-wait mode              |
 | `gdb`           | Attach GDB (TUI) to a running Xen instance           |
 | `gdb-rebuild`   | Rebuild Xen, then attach GDB                         |
+| `clean`         | Remove generated config files, force reconfigure on next build |
 
 ### `INITRD` option
 
