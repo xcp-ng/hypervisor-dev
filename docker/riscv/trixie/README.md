@@ -48,12 +48,12 @@ make setup
 
 Edit `config.mk` to configure your local environment.
 
-| Variable   | Required | Default                              | Description                                                    |
-|------------|----------|--------------------------------------|----------------------------------------------------------------|
-| `XEN_HOST` | Yes      | —                                    | Path to the Xen source tree on your host                       |
-| `IMAGE`    | No       | `baptleduc/xen-riscv64-trixie:latest`    | Docker image to use (override for a local build)               |
-| `KERNEL`   | No       | pulled from `baptleduc/xen-riscv64-kernel` | Path to a local `Image.gz`, overrides the image default   |
-| `VMLINUX`  | No       | —                                    | Path to `vmlinux`, enables Linux kernel symbols in GDB         |
+| Variable   | Required | Default                                                                                          | Description                                            |
+|------------|----------|--------------------------------------------------------------------------------------------------|--------------------------------------------------------|
+| `XEN_HOST` | Yes      | —                                                                                                | Path to the Xen source tree on your host               |
+| `IMAGE`    | No       | [`baptleduc/xen-riscv64-trixie:latest`](https://hub.docker.com/r/baptleduc/xen-riscv64-trixie)  | Docker image to use (override for a local build)       |
+| `KERNEL`   | No       | [`baptleduc/xen-riscv64-kernel`](https://hub.docker.com/r/baptleduc/xen-riscv64-kernel)         | Path to a local `Image.gz`, overrides the image default|
+| `VMLINUX`  | No       | —                                                                                                | Path to `vmlinux`, enables Linux kernel symbols in GDB |
 
 ### Pre-built kernel
 
