@@ -7,10 +7,12 @@ on:
     paths:
       - 'scripts/*.sh'
       - 'scripts/git-import-srpm'
+      - 'docker/riscv/**/*.sh'
   pull_request:
     paths:
       - 'scripts/*.sh'
       - 'scripts/git-import-srpm'
+      - 'docker/riscv/**/*.sh'
 
 permissions: {}
 
