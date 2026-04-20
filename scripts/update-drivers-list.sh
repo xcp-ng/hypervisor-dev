@@ -3,7 +3,41 @@
 set -o pipefail
 
 DRIVERS_DIR="$(dirname "$0")/../drivers/"
+DRIVER_DISKS_DIR="$(dirname "$0")/../driver-disks/"
 OUTPUT="$DRIVERS_DIR/README.md"
+
+function get_driver_disk_icon() {
+    local pkg="$1" ver="$2" xcpng_ver="$3"
+    local cfgs=("$DRIVER_DISKS_DIR"/*-"${xcpng_ver}".cfg)
+
+    local base_url="https://updates.xcp-ng.org/isos/drivers/8.x"
+    local cfg rpm_file pack_build iso_stem
+
+    cfg_iso_link() {
+        rpm_file="$(grep -F 'RPM_FILE='   "$1" | sed 's/^RPM_FILE="\(.*\)"$/\1/')"
+        pack_build="$(grep -F 'PACK_BUILD=' "$1" | sed 's/^PACK_BUILD="\(.*\)"$/\1/')"
+        iso_stem="${rpm_file%.*.rpm}"
+        iso_stem="${iso_stem%-*}+${iso_stem##*-}"
+        echo "[${2}](${base_url}/${iso_stem}+${pack_build}.iso)"
+    }
+
+    # Exact version matches get an ISO icon
+    for cfg in "${cfgs[@]}"; do
+        grep -qF "RPM_FILE=\"${pkg}-${ver}.xcpng${xcpng_ver}." "$cfg" 2>/dev/null || continue
+        cfg_iso_link "$cfg" "💿"
+        return 0
+    done
+
+    # Package name match with differing version get a disquette
+    for cfg in "${cfgs[@]}"; do
+        grep -qF "RPM_FILE=\"${pkg}-" "$cfg" 2>/dev/null || continue
+
+	# Make sure we are not loose-matching on the -alt version
+        grep -qF "RPM_FILE=\"${pkg}-alt-" "$cfg" 2>/dev/null && continue
+        cfg_iso_link "$cfg" "💾"
+        return 0
+    done
+}
 
 function get_version() {
     local specfile="$1"
@@ -12,7 +46,10 @@ function get_version() {
 
 function generate_table() {
     local version_dir="$1"
+    local xcpng_version
+    xcpng_version="$(basename "$version_dir")"
     local srpm_dir="$version_dir/srpm"
+    local source_dir="$version_dir/source"
     local metadata_file="$srpm_dir/metadata.yaml"
 
     # Load metadata once as JSON so per-package lookups use fast jq calls.
@@ -51,15 +88,18 @@ function generate_table() {
     echo "| Package | Main driver | Alternate Driver | XS 8.3 Base | XS 8.3 early access |"
     echo "|---------|-------------|------------------|-------------|---------------------|"
     while IFS= read -r pkg; do
-        local normal="${normal_vers[$pkg]:-}"
-        local alt="${alt_vers[$pkg]:-}"
+        local normal_raw="${normal_vers[$pkg]:-}" alt_raw="${alt_vers[$pkg]:-}"
+        local normal="$normal_raw" alt="$alt_raw"
 
-        if [ -n "$normal" ] && [ -n "$alt" ] && [ "$normal" != "$alt" ]; then
+        if [ -n "$normal_raw" ] && [ -n "$alt_raw" ] && [ "$normal_raw" != "$alt_raw" ]; then
             local newer
-            newer="$(printf '%s\n' "$normal" "$alt" | sort -V | tail -1)"
-            [ "$newer" = "$normal" ] && normal="$normal ↑"
-            [ "$newer" = "$alt"    ] && alt="$alt ↑"
+            newer="$(printf '%s\n' "$normal_raw" "$alt_raw" | sort -V | tail -1)"
+            [ "$newer" = "$normal_raw" ] && normal="$normal ↑"
+            [ "$newer" = "$alt_raw"    ] && alt="$alt ↑"
         fi
+
+	normal="$normal $(get_driver_disk_icon "$pkg" "$normal_raw" "$xcpng_version") "
+	alt="$alt $(get_driver_disk_icon "${pkg}-alt" "$alt_raw" "$xcpng_version")"
 
         local xs_base xs_ea extra=""
         xs_base="$(jq -r --arg p "$pkg" '.[$p].xs_base // ""' <<< "$meta_json")"
