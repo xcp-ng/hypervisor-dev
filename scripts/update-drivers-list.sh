@@ -13,6 +13,12 @@ function get_version() {
 function generate_table() {
     local version_dir="$1"
     local srpm_dir="$version_dir/srpm"
+    local metadata_file="$srpm_dir/metadata.yaml"
+
+    # Load metadata once as JSON so per-package lookups use fast jq calls.
+    local meta_json="{}"
+    [ -f "$metadata_file" ] && \
+        meta_json="$(python3 -c "import yaml,json,sys; print(json.dumps(yaml.safe_load(open(sys.argv[1])) or {}))" "$metadata_file")"
 
     declare -A normal_vers
     declare -A alt_vers
@@ -42,8 +48,8 @@ function generate_table() {
     local packages
     packages="$(printf '%s\n' "${all_packages[@]}" | sort -u)"
 
-    echo "| Package | Main driver | Alternate Driver |"
-    echo "|---------|-------------|------------------|"
+    echo "| Package | Main driver | Alternate Driver | XS 8.3 Base | XS 8.3 early access |"
+    echo "|---------|-------------|------------------|-------------|---------------------|"
     while IFS= read -r pkg; do
         local normal="${normal_vers[$pkg]:-}"
         local alt="${alt_vers[$pkg]:-}"
@@ -55,8 +61,14 @@ function generate_table() {
             [ "$newer" = "$alt"    ] && alt="$alt ↑"
         fi
 
-        echo "| $pkg | $normal | $alt |"
+        local xs_base xs_ea extra=""
+        xs_base="$(jq -r --arg p "$pkg" '.[$p].xs_base // ""' <<< "$meta_json")"
+        xs_ea="$(jq -r --arg p "$pkg" '.[$p].xs_earlyaccess // ""' <<< "$meta_json")"
+        [ "$(jq -r --arg p "$pkg" '.[$p].default_installed // false' <<< "$meta_json")" = "true" ] || extra="📥"
+
+        echo "| $pkg $extra | $normal | $alt | $xs_base | $xs_ea |"
     done <<< "$packages"
+
 }
 
 {

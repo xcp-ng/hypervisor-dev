@@ -1,0 +1,103 @@
+# Per-package metadata for XCP-ng 8.3 drivers.
+#
+# Fields (all optional — omit rather than setting to null/false):
+#   xs_base:         version shipped in XenServer 8 base release
+#   xs_earlyaccess:  version shipped in XenServer 8 Early Access
+#   default_installed: true when installed by default in XCP-ng 8.3
+
+avago-megaraid-sas:
+  default_installed: true
+
+avago-mpt3sas:
+  default_installed: true
+
+broadcom-bnxt-en:
+  xs_base: 1.10.1_216.1.123.0-1
+  xs_earlyaccess: 1.10.3_232.0.155.5
+  default_installed: true
+
+chelsio-cxgb4:
+  default_installed: true
+
+cisco-enic:
+  xs_base: 4.2.0.26-1
+  xs_earlyaccess: 4.5.0.7-1
+  default_installed: true
+
+cisco-fnic:
+  xs_base: 2.0.0.85-1
+  xs_earlyaccess: 2.0.0.90-1
+  default_installed: true
+
+emulex-lpfc:
+  xs_base: 12.0.0.10-3
+  default_installed: true
+
+intel-e1000e:
+  xs_base: 3.8.7-2
+  default_installed: true
+
+intel-fm10k:
+  default_installed: true
+
+intel-i40e:
+  xs_base: 2.9.21-3
+  xs_earlyaccess: 2.25.11-2
+  default_installed: true
+
+intel-ice:
+  xs_base: 1.6.4-4
+  xs_earlyaccess: 1.17.1-2
+  default_installed: true
+
+intel-igb:
+  xs_base: 5.3.5.20-3
+  xs_earlyaccess: 5.13.20-2
+  default_installed: true
+
+intel-igc:
+  xs_earlyaccess: 5.10.214-3
+  default_installed: true
+
+intel-ixgbe:
+  xs_base: 5.18.6-1
+  default_installed: true
+
+mellanox-mlnxen:
+  xs_base: 5.4_1.0.3.0-3
+  xs_earlyaccess: 5.9_0.5.5.0-3
+  default_installed: true
+
+microsemi-aacraid:
+  default_installed: true
+
+microsemi-smartpqi:
+  xs_base: 2.1.20_035-1
+  xs_earlyaccess: 2.1.30_031
+  default_installed: true
+
+mlx4-modules:
+  default_installed: true
+
+qlogic-fastlinq:
+  xs_base: 8.55.13.0-1
+  xs_earlyaccess: 8.74.0.2-1
+  default_installed: true
+
+qlogic-netxtreme2:
+  xs_base: 7.14.76-2
+  default_installed: true
+
+qlogic-qla2xxx:
+  xs_base: 10.02.08.01_k-1
+  xs_earlyaccess: 10.02.13.00_k-1
+  default_installed: true
+
+r8169-module:
+  default_installed: true
+
+sfc-module:
+  default_installed: true
+
+tg3-module:
+  default_installed: true
