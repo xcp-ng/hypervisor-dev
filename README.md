@@ -188,6 +188,18 @@ git add kernel-abis/Modules.kabi-4.19.19
 git commit -s -m "kernel-abis: refreshed the list of locked symbols due to <driver_name> addition."
 ```
 
+## Refresh the driver list
+
+We are maintaining a driver list so that end users can know exactly what is
+provided in [drivers/README.md](drivers/README.md), so make sure the list
+is up-to-date with your driver addition by running:
+
+```bash
+./scripts/update-driver-list.sh
+git add drivers/README.md
+git commit -s -m "drivers/README.md: refresh the list of drivers due to <driver_name> addition."
+```
+
 ## Add the source sub-module
 
 In order to be able to analyze and/or modify our driver source code, for

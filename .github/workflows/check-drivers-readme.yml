@@ -1,0 +1,30 @@
+name: Check drivers/README.md file
+
+on:
+  pull_request:
+    paths:
+      - 'drivers/**'
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install rpm tools
+        run: sudo apt-get install -y rpm
+
+      - name: Generate drivers/README.md
+        run: ./scripts/update-drivers-list.sh
+
+      - name: Fail if README.md is not up to date
+        run: |
+          if ! git diff --exit-code drivers/README.md; then
+            echo "::error::drivers/README.md is out of date. Run drivers/update-drivers-list.sh and commit the result."
+            exit 1
+          fi
