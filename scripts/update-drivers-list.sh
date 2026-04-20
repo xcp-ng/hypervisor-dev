@@ -47,6 +47,14 @@ function generate_table() {
     while IFS= read -r pkg; do
         local normal="${normal_vers[$pkg]:-}"
         local alt="${alt_vers[$pkg]:-}"
+
+        if [ -n "$normal" ] && [ -n "$alt" ] && [ "$normal" != "$alt" ]; then
+            local newer
+            newer="$(printf '%s\n' "$normal" "$alt" | sort -V | tail -1)"
+            [ "$newer" = "$normal" ] && normal="$normal ↑"
+            [ "$newer" = "$alt"    ] && alt="$alt ↑"
+        fi
+
         echo "| $pkg | $normal | $alt |"
     done <<< "$packages"
 }
