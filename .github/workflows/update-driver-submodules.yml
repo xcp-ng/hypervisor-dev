@@ -1,0 +1,91 @@
+name: Update driver submodules
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-submodules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          submodules: true
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rewrite SSH submodule URLs to HTTPS
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+      - name: Update driver submodules to origin/8.3
+        id: update
+        run: |
+          updated=()
+
+          for submodule in drivers/8.3/srpm/*/; do
+            submodule="${submodule%/}"
+
+            git -C "$submodule" fetch origin 8.3
+
+            local_sha=$(git -C "$submodule" rev-parse HEAD)
+            remote_sha=$(git -C "$submodule" rev-parse origin/8.3)
+
+            if [ "$local_sha" != "$remote_sha" ]; then
+              git -C "$submodule" checkout --detach origin/8.3
+              echo "  $submodule: $local_sha -> $remote_sha"
+              updated+=("$submodule")
+            fi
+          done
+
+          if [ ${#updated[@]} -gt 0 ]; then
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "${updated[@]}" > /tmp/updated-submodules.txt
+          else
+            echo "No submodules needed updating."
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Regenerate drivers/README.md
+        if: steps.update.outputs.updated == 'true'
+        run: |
+          sudo apt-get install -y rpm
+          scripts/update-drivers-list.sh
+
+      - name: Commit and open PR
+        if: steps.update.outputs.updated == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          branch="auto/update-driver-submodules"
+
+          git config user.name "Vates Driver Importer"
+          git config user.email "gitimporter@vates.tech"
+
+          git checkout -b "$branch"
+          git add drivers/8.3/srpm/
+          git commit -m "drivers: update submodules to latest 8.3 branch"
+
+          # Force-push so a re-run on the same day updates the existing branch.
+          git push --force origin "$branch"
+
+          # Open a PR only if none is already open for this branch.
+          if ! gh pr list --head "$branch" --state open --json number --jq '.[0].number' | grep -q .; then
+            {
+              echo "Automated daily update of driver submodules to the latest \`8.3\` branch."
+              echo ""
+              echo "Updated submodules:"
+              sed 's/^/- /' /tmp/updated-submodules.txt
+            } > /tmp/pr-body.txt
+
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "drivers: update submodules to latest 8.3 branch" \
+              --body-file /tmp/pr-body.txt
+          fi
