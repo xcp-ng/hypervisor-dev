@@ -262,3 +262,6 @@
 [submodule "drivers/8.3/source/tg3-module-alt"]
 	path = drivers/8.3/source/tg3-module-alt
 	url = git@github.com:xcp-ng-rpms/tg3-module-alt.git
+[submodule "driver-disks"]
+	path = driver-disks
+	url = git@github.com:xcp-ng/driver-disks.git
