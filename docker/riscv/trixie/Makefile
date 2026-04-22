@@ -29,12 +29,18 @@ DOCKER := docker run --rm -it \
 
 # Override the pre-compiled kernel bundled in the Docker image
 ifdef KERNEL
+ifeq ($(wildcard $(KERNEL)),)
+$(error KERNEL file not found: $(KERNEL))
+endif
 DOCKER += -v "$(KERNEL)":/build/kernel/Image.gz \
           -e "KERNEL=/build/kernel/Image.gz"
 endif
 
 # Mount vmlinux for GDB kernel symbol loading
 ifdef VMLINUX
+ifeq ($(wildcard $(VMLINUX)),)
+$(error VMLINUX file not found: $(VMLINUX))
+endif
 DOCKER += -v "$(VMLINUX)":/build/vmlinux \
           -e "VMLINUX=/build/vmlinux"
 endif
