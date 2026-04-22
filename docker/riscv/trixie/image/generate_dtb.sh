@@ -54,7 +54,7 @@ generate_base_dts() {
     local ic_flags=""
     case $platform_interrupt_controller in
         aplic-imsic)
-            ic_flags=",aclint=off,aia=aplic-imsic,aia-guests=7 -cpu rv64,smstateen=on"
+            ic_flags=",aclint=off,aia=aplic-imsic,aia-guests=7 -cpu rv64,smstateen=on,sstc=off"
             ;;
     esac
 
