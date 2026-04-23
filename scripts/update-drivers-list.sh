@@ -91,6 +91,15 @@ function generate_table() {
         local normal_raw="${normal_vers[$pkg]:-}" alt_raw="${alt_vers[$pkg]:-}"
         local normal="$normal_raw" alt="$alt_raw"
 
+	[ -n "$normal_raw" ] && {
+	    normal="[$normal_raw](https://github.com/xcp-ng-rpms/$pkg/blob/$(git -C "$srpm_dir/$pkg" rev-parse HEAD))"
+	    normal="[📜](https://github.com/xcp-ng-rpms/$pkg/blob/$(git -C "$source_dir/$pkg" rev-parse HEAD)) $normal"
+	}
+	[ -n "$alt_raw" ] && {
+	    alt="[$alt_raw](https://github.com/xcp-ng-rpms/$pkg/blob/$(git -C "$srpm_dir/$pkg-alt" rev-parse HEAD))"
+	    alt="[📜](https://github.com/xcp-ng-rpms/$pkg/blob/$(git -C "$source_dir/$pkg-alt" rev-parse HEAD)) $alt"
+	}
+
         if [ -n "$normal_raw" ] && [ -n "$alt_raw" ] && [ "$normal_raw" != "$alt_raw" ]; then
             local newer
             newer="$(printf '%s\n' "$normal_raw" "$alt_raw" | sort -V | tail -1)"
