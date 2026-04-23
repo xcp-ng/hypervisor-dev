@@ -4,6 +4,14 @@
 
 ## XCP-ng 8.3
 
+> [!NOTE]
+> 📥 other driver (needs manual installation)</br>
+> 📜 driver source code</br>
+> 💿 driver disk available for this exact version</br>
+> 💾 driver disk available for an older version</br>
+> </br>
+> ↑ more recent version between main/alternate</br>
+
 | Package | Main driver | Alternate Driver | XS 8.3 Base | XS 8.3 early access |
 |---------|-------------|------------------|-------------|---------------------|
 | aqc111u-module 📥 | [📜](https://github.com/xcp-ng-rpms/aqc111u-module/blob/c35fb60911ae11abde74a2de73199c05fe8141c8) [1.3.3.0-2](https://github.com/xcp-ng-rpms/aqc111u-module/blob/90ccc63964773e1c02e873704f130c82f9f12887)   |   |  |  |

@@ -134,7 +134,17 @@ function generate_table() {
     for version_dir in "$DRIVERS_DIR"/*/; do
         local_version="$(basename "$version_dir")"
         echo "## XCP-ng $local_version"
+
         echo ""
+	echo "> [!NOTE]"
+	echo "> 📥 other driver (needs manual installation)</br>"
+	echo "> 📜 driver source code</br>"
+	echo "> 💿 driver disk available for this exact version</br>"
+	echo "> 💾 driver disk available for an older version</br>"
+	echo "> </br>"
+	echo "> ↑ more recent version between main/alternate</br>"
+	echo ""
+
         generate_table "$version_dir"
         echo ""
     done
