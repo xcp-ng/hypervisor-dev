@@ -20,16 +20,16 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Rewrite SSH submodule URLs to HTTPS
-        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
-
       - name: Update driver submodules to origin/8.3
         id: update
         run: |
           updated=()
+          missing_sources=()
+          updated_sources=()
 
           for submodule in drivers/8.3/srpm/*/; do
             submodule="${submodule%/}"
+            src_submodule="${submodule/srpm/source}"
 
             git -C "$submodule" fetch origin 8.3
 
@@ -41,11 +41,59 @@ jobs:
               echo "  $submodule: $local_sha -> $remote_sha"
               updated+=("$submodule")
             fi
+
+            if [ ! -d "$src_submodule" ]; then
+              # Missing sources, we need to add the sub-module as well as import its sources
+              {
+                # Add the source sub-module
+                git submodule add git@github.com/xcpng-rpms/$(basename "$submodule").git "drivers/8.3/source/$(basename "submodule")"
+
+                # Import the sources
+                cd "$submodule"
+                #   git-import-srpm needs a source/8.3 branch to import the sources as base onto point
+                cur_rev=$(git rev-parse HEAD)
+                git checkout --orphan source/8.3
+                git rm -rf
+                git commit --allow-empty -m "Initial commit."
+                git push origin source/8.3
+                git checkout ${cur_rev}
+                #   actually do the import now
+                branch=$(OOT_DRIVER_IMPORT=y ../../../../scripts/git-import-srpm HEAD | sed -n 's/.*Constructing \([^ ]\+\) from rev HEAD/\1/p')
+                cd -
+
+                # Push the source branch and update source sub-module
+                cd "$src_submodule"
+                git checkout $branch^0
+                git push origin $branch
+                missing_sources+=("$src_submodule")
+
+                cd -
+              }
+            else
+              # Sources are present, let's check if they are stale
+              {
+                # Import the sources from HEAD
+                cd "$submodule"
+                branch=$(OOT_DRIVER_IMPORT=y ../../../../scripts/git-import-srpm HEAD | sed -n 's/.*Constructing \([^ ]\+\) from rev HEAD/\1/p')
+                cd -
+
+                # Check if they match
+                cd "$src_submodule"
+                if [ "$(git rev-parse HEAD)" != "$(git rev-parse $branch)" ]; then
+                  # Sources are stale, refresh them from the above import
+                  git checkout $branch^0
+                  updated_sources+=("$src_submodule")
+                fi
+                cd -
+              }
+            fi
           done
 
-          if [ ${#updated[@]} -gt 0 ]; then
+          if [ ${#updated[@]} -gt 0 -o ${#missing_sources[@]} -gt 0 -o ${#updated_sources[@]} -gt 0 ]; then
             echo "updated=true" >> "$GITHUB_OUTPUT"
             printf '%s\n' "${updated[@]}" > /tmp/updated-submodules.txt
+            printf '%s\n' "${missing_sources[@]}" > /tmp/missing_sources.txt
+            printf '%s\n' "${updated_sources[@]}" > /tmp/updated-sources.txt
           else
             echo "No submodules needed updating."
             echo "updated=false" >> "$GITHUB_OUTPUT"
@@ -68,8 +116,8 @@ jobs:
           git config user.email "gitimporter@vates.tech"
 
           git checkout -b "$branch"
-          git add drivers/8.3/srpm/
-          git commit -m "drivers: update submodules to latest 8.3 branch"
+          git add drivers/8.3
+          git commit -m "drivers: update submodules and corresponding sources to latest 8.3 branch"
 
           # Force-push so a re-run on the same day updates the existing branch.
           git push --force origin "$branch"
@@ -81,6 +129,10 @@ jobs:
               echo ""
               echo "Updated submodules:"
               sed 's/^/- /' /tmp/updated-submodules.txt
+              echo "Added source submodules:"
+              sed 's/^/- /' /tmp/missing-sources.txt
+              echo "Updated source submodules:"
+              sed 's/^/- /' /tmp/updated-sources.txt
             } > /tmp/pr-body.txt
 
             gh pr create \
