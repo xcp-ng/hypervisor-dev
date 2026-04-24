@@ -30,6 +30,10 @@ while [[ $# -gt 0 ]]; do
             APPEND_DRIVERS="$1"
             shift
             ;;
+        --*)
+            echo "Usage: $0 [--no-checks] [--skip-driver-build] <OUTPUT_FILE>"
+            exit 1
+            ;;
         *)
             OUTPUT_FILE="$1"
             shift
