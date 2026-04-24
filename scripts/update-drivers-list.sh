@@ -41,7 +41,7 @@ function get_driver_disk_icon() {
 
 function get_version() {
     local specfile="$1"
-    rpmspec --query --qf '%{Version}-%{Release}\n' "$specfile" 2>/dev/null | head -1 ||:
+    rpmspec --query --define 'kernel_version 4.19.0' --qf '%{Version}-%{Release}\n' "$specfile" 2>/dev/null | head -1 ||:
 }
 
 function generate_table() {
