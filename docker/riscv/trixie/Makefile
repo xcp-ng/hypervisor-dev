@@ -73,6 +73,9 @@ setup: ## Register QEMU binfmt emulators (run once after each reboot)
 build-image: ## Build the Docker image locally from image/
 	docker buildx build --platform linux/amd64 -f image/Dockerfile -t $(IMAGE) image/
 
+build-image-debug: ## Build the Docker image with debug tools (gdb) included
+	docker buildx build --platform linux/amd64 --build-arg DEBUG_XL=1 -f image/Dockerfile -t $(IMAGE) image/
+
 shell: ## Open an interactive shell in the container
 	$(DOCKER) -p 1234:1234 $(IMAGE) /bin/bash
 
