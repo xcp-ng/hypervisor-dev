@@ -7,6 +7,21 @@
 FROM baptleduc/xen-riscv64-kernel:6.18 AS kernel-riscv64
 FROM registry.gitlab.com/xen-project/people/olkur/xen/tests-artifacts/qemu-system-riscv64:8.2.0-aia-riscv64 AS qemu-aia-riscv64
 
+FROM debian:trixie-slim AS dtc-riscv64
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gcc-riscv64-linux-gnu libc6-dev-riscv64-cross \
+        make bison flex pkg-config curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+ARG DTC_VER=1.7.0
+RUN curl -fsSL https://github.com/dgibson/dtc/archive/refs/tags/v${DTC_VER}.tar.gz \
+        | tar xz && \
+    cd dtc-${DTC_VER} && \
+    make NO_PYTHON=1 NO_YAML=1 \
+         CC=riscv64-linux-gnu-gcc \
+         PREFIX=/dtc-install install-bin && \
+    riscv64-linux-gnu-strip /dtc-install/bin/dtc
+
 FROM debian:trixie-slim AS busybox-builder
 
 ARG BUSYBOX_VER=1.36.1
@@ -53,6 +68,9 @@ ENV XEN_DIST_DIR=/build/xen/dist
 ARG DOMU_INITRD_DIR=/build/domu-initrd
 ENV DOMU_INITRD_IMG=${DOMU_INITRD_DIR}/domu-initrd.img
 ARG TMP_DOMU_INITRD_DIR=/tmp/domu-initrd
+
+# Debug tools (opt-in via --build-arg DEBUG_XL=1)
+ARG DEBUG_XL=0
 
 # Cross-compilation settings
 ENV DEBIAN_FRONTEND=noninteractive
@@ -101,15 +119,17 @@ RUN mkdir -p lib && \
         cp "$lib" ./lib/; \
     done
 
+RUN --mount=type=bind,from=dtc-riscv64,source=/dtc-install,target=/dtc-stage \
+    if [ "${DEBUG_XL}" = "1" ]; then \
+        cp /dtc-stage/bin/dtc ./bin/dtc; \
+    fi
 
-WORKDIR ${BUILD_DIR}
-
+WORKDIR ${TMP_DOMU_INITRD_DIR}
+COPY --from=busybox-builder /busybox-install .
 # Build minimal domU initrd from busybox
 RUN mkdir -p ${TMP_DOMU_INITRD_DIR}/bin ${TMP_DOMU_INITRD_DIR}/sbin \
              ${TMP_DOMU_INITRD_DIR}/proc ${TMP_DOMU_INITRD_DIR}/sys \
              ${TMP_DOMU_INITRD_DIR}/dev ${TMP_DOMU_INITRD_DIR}/etc/init.d && \
-    cp -a ${INITRD_DIR}/bin/busybox ${TMP_DOMU_INITRD_DIR}/bin/ && \
-    ${TMP_DOMU_INITRD_DIR}/bin/busybox --install -s ${TMP_DOMU_INITRD_DIR}/bin/ && \
     printf '%s\n' \
         '#!/bin/sh' \
         'mount -t proc proc /proc' \
@@ -122,6 +142,7 @@ RUN mkdir -p ${TMP_DOMU_INITRD_DIR}/bin ${TMP_DOMU_INITRD_DIR}/sbin \
     genext2fs -b 4096 -N 512 -U -d ${TMP_DOMU_INITRD_DIR}/ ${DOMU_INITRD_IMG} && \
     rm -rf ${TMP_DOMU_INITRD_DIR}
 
+WORKDIR ${BUILD_DIR}
 # External binaries
 COPY --from=kernel-riscv64 \
     /Image.gz ${ARTIFACTS_DIR}/Image.gz

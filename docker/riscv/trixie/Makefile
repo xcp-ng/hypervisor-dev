@@ -29,12 +29,18 @@ DOCKER := docker run --rm -it \
 
 # Override the pre-compiled kernel bundled in the Docker image
 ifdef KERNEL
+ifeq ($(wildcard $(KERNEL)),)
+$(error KERNEL file not found: $(KERNEL))
+endif
 DOCKER += -v "$(KERNEL)":/build/kernel/Image.gz \
           -e "KERNEL=/build/kernel/Image.gz"
 endif
 
 # Mount vmlinux for GDB kernel symbol loading
 ifdef VMLINUX
+ifeq ($(wildcard $(VMLINUX)),)
+$(error VMLINUX file not found: $(VMLINUX))
+endif
 DOCKER += -v "$(VMLINUX)":/build/vmlinux \
           -e "VMLINUX=/build/vmlinux"
 endif
@@ -66,6 +72,9 @@ setup: ## Register QEMU binfmt emulators (run once after each reboot)
 
 build-image: ## Build the Docker image locally from image/
 	docker buildx build --platform linux/amd64 -f image/Dockerfile -t $(IMAGE) image/
+
+build-image-debug: ## Build the Docker image with debug tools (gdb) included
+	docker buildx build --platform linux/amd64 --build-arg DEBUG_XL=1 -f image/Dockerfile -t $(IMAGE) image/
 
 shell: ## Open an interactive shell in the container
 	$(DOCKER) -p 1234:1234 $(IMAGE) /bin/bash

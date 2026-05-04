@@ -26,7 +26,7 @@ XEN_MAKE := $(MAKE) -C $(XEN_ROOT) -j$(nproc)
 
 QEMU_BASE_FLAGS = \
 	-M virt,aclint=off,aia=aplic-imsic,aia-guests=7 \
-	-cpu rv64,smstateen=on \
+	-cpu rv64,smstateen=on,sstc=off\
 	-bios $(OPENSBI) \
 	-smp 2 \
 	-nographic \
@@ -58,7 +58,7 @@ GDB_ARGS += \
 	-ex "b start_xen" \
 	-ex "c"
 
-.PHONY: all clean help initrd-tools dist-tools dist-xen dist build-tools build-xen build go go-debug gdb initrd create-common-dirs create-tools-dirs
+.PHONY: all clean help initrd-tools dist-tools dist-xen dist build-tools build-xen build go go-debug gdb initrd create-common-dirs create-tools-dirs install
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
@@ -67,7 +67,7 @@ help: ## Display this help message
 # --- Internal targets ---
 
 $(XEN_CONFIGURE_OUT): $(XEN_ROOT)/configure
-	cd $(XEN_ROOT) && ./configure --host=riscv64-linux-gnu
+	cd $(XEN_ROOT) && ./configure --prefix=/usr --host=riscv64-linux-gnu
 
 $(XEN_CONFIG):
 	cp $(CONFIGS_DIR)/.config $(XEN_CONFIG)
@@ -104,7 +104,7 @@ dist-tools: $(XEN_CONFIGURE_OUT) ## Build and install Xen tools to /dist
 
 # Use sub-make to preserve parallel build (-j$(nproc) not propagated by top-level Xen build)
 dist-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build and install Xen hypervisor to /dist
-	$(MAKE) -C $(XEN_ROOT)/xen install DESTDIR=$(XEN_ROOT)/dist/install -j$(nproc)
+	$(MAKE) -C $(XEN_ROOT)/xen install DESTDIR=$(XEN_ROOT) -j$(nproc)
 
 dist: dist-tools dist-xen ## Build and install both tools and Xen to /dist
 
@@ -117,6 +117,9 @@ build-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build Xen hypervisor
 	$(MAKE) -C $(XEN_ROOT)/xen -j$(nproc)
 
 build: build-tools build-xen ## Build both Xen tools and hypervisor
+
+install: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT)
+	$(MAKE) -C $(XEN_ROOT) install SUBSYSTEM="xen tools" DESTDIR=$(INITRD_DIR) -j$(nproc)
 
 # --- Initrd targets ---
 
@@ -134,10 +137,8 @@ initrd: $(INITRD_STAMP) create-common-dirs ## Create basic initrd image
 	cp $(RCS_FILE) $(INITRD_DIR)/etc/init.d/
 	genext2fs -b 6500 -N 1024 -U -d $(INITRD_DIR)/ $(INITRD)
 
-initrd-tools: dist-tools create-tools-dirs ## Create initrd with Xen tools included
+initrd-tools: install create-tools-dirs ## Create initrd with Xen tools included
 	echo "Building initrd with tools image"
-	cp -r $(XEN_ROOT)/dist/* $(INITRD_DIR)/dist/
-	mv $(INITRD_DIR)/dist/install/usr/local/lib/* $(INITRD_DIR)/lib/
 	printf '%s\n' \
 	'#!/bin/sh' \
 	'echo "Hello RISC-V World!"' \
@@ -147,10 +148,10 @@ initrd-tools: dist-tools create-tools-dirs ## Create initrd with Xen tools inclu
 	'mount -t devpts devpts /dev/pts' \
 	'mount -t sysfs sysfs /sys' \
 	'export LIBXL_DEBUG_DUMP_DTB="/var/log/xen/debug_dump_dt.dtb"' \
-	'./dist/install/usr/local/sbin/xenstored' \
-	'./dist/install/usr/local/sbin/xenconsoled' \
-	'sleep 1' \
-	'./lib/xen/bin/xen-init-dom0' \
+	'xenstored' \
+	'xenconsoled -vvvv' \
+	'sleep 0.5' \
+	'/usr/lib/xen/bin/xen-init-dom0' \
 	'exec /bin/sh' \
 	> $(RCS_FILE) && \
 	chmod +x $(RCS_FILE)
