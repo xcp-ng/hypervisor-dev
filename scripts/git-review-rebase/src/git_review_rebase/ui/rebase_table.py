@@ -5,12 +5,26 @@ import subprocess
 
 import pygit2
 from rich.text import Text
+from textual.message import Message
 from textual.widgets import DataTable
 
 from ..commit_matching import RebasedCommitsMatches
 from ..constants import CommitMatchInfoFlag, FilterType, commit_match_info_repr
+from ..git_utils import cherry_pick_parents
+from .cherry_pick_screen import CherryPickScreen
 from .search_bar import SearchBar
 from .utils import cell_from_commit
+
+
+class ShowDiff(Message):
+    def __init__(
+        self,
+        left_commit: pygit2.Commit | None,
+        right_commit: pygit2.Commit | None,
+    ):
+        super().__init__()
+        self.left_commit = left_commit
+        self.right_commit = right_commit
 
 
 class RebaseTable(DataTable):
@@ -50,6 +64,34 @@ class RebaseTable(DataTable):
         self.row_key = event.row_key
 
     def action_show_diff(self) -> None:
+        assert self.rebased_commit_matches is not None
+        assert isinstance(self.row_key.value, pygit2.Oid)
+        match = self.rebased_commit_matches.commit_matches[self.row_key.value]
+
+        if CommitMatchInfoFlag.Added in match.match_info:
+            assert match.right_commit is not None
+            cherry_sha1s = cherry_pick_parents(match.right_commit)
+            if cherry_sha1s:
+                cherry_commits: list[pygit2.Commit] = []
+                for sha1 in cherry_sha1s:
+                    try:
+                        commit = self.repo.get(pygit2.Oid(hex=sha1))
+                        if isinstance(commit, pygit2.Commit):
+                            cherry_commits.append(commit)
+                    except Exception:
+                        pass
+                if cherry_commits:
+                    right_commit = match.right_commit
+
+                    def handle_selection(result, right: pygit2.Commit = right_commit) -> None:
+                        if result is not False:
+                            self.post_message(ShowDiff(result, right))
+
+                    self.app.push_screen(
+                        CherryPickScreen(right_commit, cherry_commits, self.repo), handle_selection
+                    )
+                    return
+
         self.action_select_cursor()
 
     def on_mount(self) -> None:

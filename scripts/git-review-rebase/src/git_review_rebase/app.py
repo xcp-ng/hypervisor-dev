@@ -14,7 +14,7 @@ from .constants import CommitMatchInfoFlag, FilterType
 from .git_utils import oid
 from .ui.diff_table import CloseDiffTable, DiffTable
 from .ui.filter_screen import FilterScreen
-from .ui.rebase_table import RebaseTable
+from .ui.rebase_table import RebaseTable, ShowDiff
 
 
 class GitReviewRebase(App):
@@ -154,25 +154,33 @@ class GitReviewRebase(App):
         self.rebase_table.focus()
         self.refresh_bindings()
 
-    async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+    async def _open_diff(
+        self,
+        left_commit: pygit2.Commit | None,
+        right_commit: pygit2.Commit | None,
+    ) -> None:
         assert self.diff_table is not None
+        assert self.rebase_table is not None
+        self.rebase_table.styles.height = "20%"
+        self.diff_table.styles.height = "80%"
+        async with self.diff_table.reload_lock:
+            self.diff_table.load_commit_diff(left_commit, right_commit)
+            await self.diff_table.show_diff()
+        self.diff_table.focus()
+        self.active_table = self.diff_table
+        self.refresh()
+
+    async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         assert self.rebase_table is not None
 
         if event.data_table == self.rebase_table:
-            assert event.row_key.value is not None
-            self.rebase_table.styles.height = "20%"
-            self.diff_table.styles.height = "80%"
-            async with self.diff_table.reload_lock:
-                assert self.rebased_commits_matches is not None
-                assert isinstance(event.row_key.value, pygit2.Oid)
-                self.diff_table.load_commit_diff(
-                    self.rebased_commits_matches.commit_matches[event.row_key.value].left_commit,
-                    self.rebased_commits_matches.commit_matches[event.row_key.value].right_commit,
-                )
-                await self.diff_table.show_diff()
-            self.diff_table.focus()
-            self.active_table = self.diff_table
-            self.refresh()
+            assert self.rebased_commits_matches is not None
+            assert isinstance(event.row_key.value, pygit2.Oid)
+            match = self.rebased_commits_matches.commit_matches[event.row_key.value]
+            await self._open_diff(match.left_commit, match.right_commit)
+
+    async def on_show_diff(self, message: ShowDiff) -> None:
+        await self._open_diff(message.left_commit, message.right_commit)
 
     def on_close_diff_table(self, message: CloseDiffTable):
         assert self.diff_table is not None
