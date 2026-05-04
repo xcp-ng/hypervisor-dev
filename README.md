@@ -107,7 +107,7 @@ The branches are created by the
 [git-import-srpm](./scripts/git-import-srpm) script run from within the
 SRPM repository.
 
-We also have an [elixir instance]() with the source code indexed for all
+We also have an [elixir instance](http://10.1.9.1/) with the source code indexed for all
 past released RPMs.
 
 # Pre-requisites
