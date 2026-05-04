@@ -106,9 +106,6 @@ dist-tools: $(XEN_CONFIGURE_OUT) ## Build and install Xen tools to /dist
 dist-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build and install Xen hypervisor to /dist
 	$(MAKE) -C $(XEN_ROOT)/xen install DESTDIR=$(XEN_ROOT) -j$(nproc)
 
-install: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT)
-	$(MAKE) -C $(XEN_ROOT) install DESTDIR=$(INITRD_DIR) -j$(nproc)
-
 dist: dist-tools dist-xen ## Build and install both tools and Xen to /dist
 
 # Uses the Xen top-level build-tools (no -j bypass): same rationale as dist-tools.
@@ -120,6 +117,9 @@ build-xen: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT) ## Build Xen hypervisor
 	$(MAKE) -C $(XEN_ROOT)/xen -j$(nproc)
 
 build: build-tools build-xen ## Build both Xen tools and hypervisor
+
+install: $(XEN_CONFIG) $(XEN_CONFIGURE_OUT)
+	$(MAKE) -C $(XEN_ROOT) install SUBSYSTEM="xen tools" DESTDIR=$(INITRD_DIR) -j$(nproc)
 
 # --- Initrd targets ---
 
