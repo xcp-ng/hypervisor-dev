@@ -152,9 +152,6 @@ initrd-tools: install create-tools-dirs ## Create initrd with Xen tools included
 	'xenconsoled -vvvv' \
 	'sleep 0.5' \
 	'/usr/lib/xen/bin/xen-init-dom0' \
-	'xl cpupool-create name=\"test\"' \
-	'xl cpupool-cpu-remove Pool-0 1' \
-	'xl cpupool-cpu-add test 1' \
 	'exec /bin/sh' \
 	> $(RCS_FILE) && \
 	chmod +x $(RCS_FILE)
