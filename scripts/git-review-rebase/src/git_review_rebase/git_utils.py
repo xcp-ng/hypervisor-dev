@@ -1,6 +1,7 @@
 """Git utility functions for repository operations."""
 
 import multiprocessing
+import re
 from multiprocessing.managers import DictProxy
 
 import pygit2
@@ -94,6 +95,14 @@ def patchids(
                 [(str(oid), cache_flags) for oid in commits_oids],
             )
         return dict(_commit_by_patchid_str)
+
+
+_CHERRY_PICK_RE = re.compile(r"\(cherry picked from commit ([0-9a-f]{40})\)")
+
+
+def cherry_pick_parents(commit: pygit2.Commit) -> list[str]:
+    """Return sha1 strings from '(cherry picked from commit ...)' lines in commit message."""
+    return _CHERRY_PICK_RE.findall(commit.message)
 
 
 def abbrev(oid: pygit2.Oid):

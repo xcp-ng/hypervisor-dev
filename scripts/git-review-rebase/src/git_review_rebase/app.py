@@ -14,7 +14,7 @@ from .constants import CommitMatchInfoFlag, FilterType
 from .git_utils import oid
 from .ui.diff_table import CloseDiffTable, DiffTable
 from .ui.filter_screen import FilterScreen
-from .ui.rebase_table import RebaseTable
+from .ui.rebase_table import RebaseTable, ShowDiff
 
 
 class GitReviewRebase(App):
@@ -178,6 +178,9 @@ class GitReviewRebase(App):
             assert isinstance(event.row_key.value, pygit2.Oid)
             match = self.rebased_commits_matches.commit_matches[event.row_key.value]
             await self._open_diff(match.left_commit, match.right_commit)
+
+    async def on_show_diff(self, message: ShowDiff) -> None:
+        await self._open_diff(message.left_commit, message.right_commit)
 
     def on_close_diff_table(self, message: CloseDiffTable):
         assert self.diff_table is not None
