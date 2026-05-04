@@ -1,0 +1,50 @@
+name: Generate PlantUML diagrams
+
+on:
+  pull_request:
+    paths:
+      - 'doc/**.puml'
+  workflow_dispatch:
+
+jobs:
+  generate-diagrams:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: true
+          ref: ${{ github.head_ref }}
+
+      - name: Set up Java
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Download PlantUML
+        run: |
+          curl -L -o plantuml.jar \
+            https://github.com/plantuml/plantuml/releases/download/v1.2025.2/plantuml-1.2025.2.jar
+
+      - name: Generate SVG diagrams
+        run: |
+          find doc/ -name "*.puml" | while read -r f; do
+            rel_dir=$(dirname "$f" | sed 's|^doc/||')
+            out_dir="doc/generated/$rel_dir"
+            mkdir -p "$out_dir"
+            java -jar plantuml.jar -tsvg -o "$(pwd)/$out_dir" "$f"
+          done
+
+      - name: Commit generated diagrams
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add doc/generated/
+          if ! git diff --cached --exit-code; then
+            git commit -m "ci: regenerate PlantUML diagrams"
+            git push
+          else
+            echo "No changes to commit."
+          fi

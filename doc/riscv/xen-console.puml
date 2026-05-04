@@ -1,0 +1,103 @@
+@startuml xen-console
+title Xen PV Console — RISC-V (hvc0)
+
+skinparam sequenceMessageAlign center
+skinparam participantPadding 20
+skinparam boxPadding 10
+
+actor       "User"         as user
+participant "dom0\nxenconsoled\n(tools/console/daemon/io.c)" as xcd
+participant "Xen\nhypervisor\n(xen/common/)" as xen
+participant "domU\nLinux hvc0\n(drivers/tty/hvc/hvc_xen.c)" as domu
+
+== Initialization ==
+
+note over xen
+  Domain build: tools/libs/guest/xg_dom_riscv.c
+  alloc_magic_pages() + xg_dom_boot.c xc_dom_gnttab_seed()
+end note
+
+xen -> xen : alloc_magic_pages()\n  populate 4 guest physmap pages at GUEST_MAGIC_BASE\n  console page = base + CONSOLE_PFN_OFFSET(0)\n  zero page → xencons_interface {in[1024], out[2048]}\n  HVM_PARAM_CONSOLE_PFN = console_pfn\n  (xg_dom_riscv.c:alloc_magic_pages)
+xen -> xen : allocate interdomain event channel\n(evtchn_alloc_unbound)\nHVM_PARAM_CONSOLE_EVTCHN = evtchn
+xen -> xen : xc_dom_gnttab_seed()\n  domU grant table[GNTTAB_RESERVED_CONSOLE=0] =\n    { flags=GTF_permit_access,\n      domid=dom0,\n      frame=console_gfn }\n  domU grants dom0 access to its console page\n  (xg_dom_boot.c:xc_dom_set_gnttab_entry)
+xen -> xen : write xenstore entries\n/local/domain/<domid>/console/\n  ring-ref = GNTTAB_RESERVED_CONSOLE (0)\n  port     = <evtchn_port>
+
+xen --> domu : pass console MFN + evtchn\nvia xen_start_info\n(xen_start_info->console.domU.{mfn,evtchn})
+
+note over domu
+  hvc_xen.c: xen_pv_console_init()
+end note
+
+domu -> domu : map shared page\ngfn_to_virt(mfn) → intf
+domu -> domu : bind evtchn to Linux IRQ\nbind_evtchn_to_irq_lateeoi(evtchn)
+domu -> domu : register hvc ops\nhvc_alloc(HVC_COOKIE, irq, &domU_hvc_ops)
+
+note over xcd
+  xenconsoled: console_create_ring()
+  tools/console/daemon/io.c
+end note
+
+xcd -> xen  : xs_gather("/local/domain/<domid>/console")\nread ring-ref + port
+xen --> xcd : ring-ref, remote_port
+xcd -> xen  : xengnttab_map_grant_ref(domid, GNTTAB_RESERVED_CONSOLE=0)\n[ring-ref is fallback GFN if grant table unavailable]\nmap domU grant entry 0 → console page (xencons_interface*)
+xen --> xcd : intf mapped
+xcd -> xen  : xenevtchn_bind_interdomain(domid, remote_port)\nbind interdomain event channel
+xen --> xcd : local_port
+
+note over xcd, domu
+  Shared page (xencons_interface) now accessible by both sides.
+  Event channel fully bound: xcd.local_port ↔ domu.evtchn
+end note
+
+== Console Input (user types a character) ==
+
+user -> xcd : keystroke on pty master
+
+note over xcd
+  handle_tty_write()
+  tools/console/daemon/io.c
+end note
+
+xcd -> xcd  : write char to in[] ring\nintf->in[in_prod++ & mask] = char\nxen_mb()
+xcd -> xen  : xenevtchn_notify(local_port)\n[SBI ecall → evtchn_send()]
+
+note over xen
+  xen/common/event_channel.c: evtchn_send()
+  xen/common/event_2l.c: evtchn_2l_set_pending()
+end note
+
+xen -> xen  : set evtchn_pending bit\nguest_test_and_set_bit(port, shared_info.evtchn_pending)
+xen -> xen  : set evtchn_pending_sel\nguest_test_and_set_bit(word, vcpu_info.evtchn_pending_sel)
+xen -> xen  : vcpu_mark_events_pending(d1v0)\n  set hvip.IRQ_VS_EVTCHN in vcpu struct\n  vcpu_kick(d1v0)
+
+alt d1v0 running on pcpu1 (is_running=true)
+    xen -> xen  : smp_send_event_check_mask(pcpu1)\n→ sbi_send_ipi()\n→ OpenSBI sets mip.SSIP on pcpu1
+    note over xen
+      pcpu1: SSIP fires (sie.SSIE=1)
+      do_trap(IRQ_S_SOFT)
+      csr_clear(sip, SSIP)
+      leave_hypervisor_to_guest()
+        → context_restore_csrs()
+        → csr_write(HVIP, hvip | IRQ_VS_EVTCHN)
+      sret → VS-mode with virtual interrupt pending
+    end note
+else d1v0 blocked (is_running=false)
+    xen -> xen  : vcpu_unblock(d1v0)\n→ null_unit_wake()\n→ cpu_raise_softirq(pcpu1, SCHEDULE_SOFTIRQ)\n→ sbi_send_ipi() wakes pcpu1 idle WFI\n→ scheduler runs d1v0\n→ context_restore_csrs() writes HVIP
+end
+
+xen --> domu : virtual interrupt delivered\n(hvip.IRQ_VS_EVTCHN → vsip.SSIP in VS-mode)
+
+note over domu
+  Linux evtchn IRQ fires:
+  hvc_console.c: __hvc_poll() → domU_read_console()
+  hvc_xen.c
+end note
+
+domu -> domu : read char from in[] ring\nbuf[i] = intf->in[in_cons++ & mask]\nxen_mb()\nintf->in_cons updated
+
+domu -> xen  : notify_remote_via_evtchn(evtchn)\n[signal dom0: buffer consumed]
+xen -> xcd  : event channel notification\n→ xenevtchn_pending() fires
+
+domu -> domu : tty_insert_flip_char(buf[i])\ntty_flip_buffer_push()\n→ char appears on hvc0
+
+@enduml
