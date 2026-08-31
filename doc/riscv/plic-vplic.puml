@@ -1,0 +1,97 @@
+@startuml plic-vplic
+title PLIC / vPLIC — RISC-V passthrough IRQ delivery to a domU
+
+skinparam sequenceMessageAlign center
+skinparam participantPadding 20
+skinparam boxPadding 10
+
+participant "Physical\ndevice"                                  as dev
+participant "Xen\nphysical PLIC driver\n(xen/arch/riscv/plic.c)" as plic
+participant "Xen\nirq core\n(xen/arch/riscv/irq.c)"              as irqcore
+participant "Xen\nvPLIC emulation\n(xen/arch/riscv/vplic.c)"     as vplic
+participant "domU\nguest kernel"                                 as domu
+
+== Domain build: vPLIC init + DT node ==
+
+note over vplic
+  domain_vplic_init() — vplic.c:541
+end note
+
+vplic -> vplic : alloc source_priority[]/target_priority[]/\n  pending[]/claimed[]/enable[]\n  num_contexts = max_vcpus * VPLIC_CNTXT_PER_HART (M+S per vcpu)\n(vplic.c:541-579)
+vplic -> vplic : register_mmio_handler(GUEST_PLIC_BASE,\n  PLIC_SIZE(num_contexts))\n(vplic.c:578)
+
+note over vplic
+  vplic_make_domu_dt_node() — vplic.c:92
+end note
+
+vplic -> vplic : emit /soc/plic@x node\n  reg = [GUEST_PLIC_BASE, PLIC_SIZE(num_contexts))\n  riscv,ndev = nr_virqs - 1\n  interrupts-extended =\n    per-vcpu (cpuNintc, IRQ_M_EXT) + (cpuNintc, IRQ_S_EXT) pairs
+
+== Guest enables a (passthrough) IRQ ==
+
+domu -> vplic : MMIO write\n  GUEST_PLIC_BASE + ENABLE_BASE + ctx*ENABLE_PER_HART + word\n  set bit for vIRQ N
+vplic -> vplic : vplic_mmio_write() → vplic_emulate_store()\n  enable[ctx][word] |= bit\n(vplic.c:307-344)
+vplic -> plic  : bit rising edge on a real pIRQ →\n  irq_to_desc(pirq)->handler->enable(desc)\n  = plic_irq_enable() : mirrors enable to physical PLIC context\n(vplic.c:328-339 → plic.c:97)
+
+note over vplic, plic
+  vIRQ number == physical IRQ number for passthrough sources
+  (no remapping layer) — mirroring only forwards real pIRQs,
+  pirq==0 and pirq>=nr_virqs are skipped.
+end note
+
+== Physical IRQ fires ==
+
+dev -> plic : asserts interrupt line (source id = irq)
+
+note over plic
+  plic_handle_interrupt() — plic.c:372
+  runs on whichever pcpu's context has the source enabled
+end note
+
+plic -> plic  : hwirq = readl(CONTEXT_CLAIM)\n(plic.c:379)
+plic -> irqcore : do_IRQ(regs, hwirq)\n(irq.c:189)
+irqcore -> plic : desc->handler->ack(desc)\n  = plic_guest_irq_ack()\n  plic_claim_cntx[irq] = plic_cpu_context[this_pcpu]\n(plic.c:343-346)
+
+note over plic
+  ack() does NOT write CONTEXT_CLAIM back.
+  Physical source stays claimed/masked in HW until the guest EOIs.
+end note
+
+irqcore -> vplic : action->handler(irq, dev_id)\n  = vplic_irq_handler()\n(vplic.c:448)
+vplic -> vplic  : vplic_set_pending(virq, true)\n  vplic_update()\n(vplic.c:465-466)
+
+note over vplic
+  vplic_update() — vplic.c:266
+  scans contexts, vplic_claimed(ctx) picks the highest-priority
+  pending & enabled source for that context
+end note
+
+vplic -> domu : vcpu_set_interrupt(vcpu, IRQ_VS_EXT)\n  sets arch.irqs_pending / kicks vcpu\n(domain.c:236)
+
+note over irqcore
+  Back in do_IRQ(): desc->status has IRQ_GUEST set,
+  so desc->handler->end() is skipped here (irq.c:224).
+  Physical IRQ re-arm is deferred to the guest's EOI.
+end note
+
+== Guest scheduled: virtual interrupt injected ==
+
+irqcore -> domu : leave_hypervisor_to_guest()\n  build hvip from irqs_pending & irqs_pending_mask\n  csr_write(CSR_HVIP, hvip)\n(domain.c:283-327)
+domu -> domu : sret → VS-mode, IRQ_VS_EXT taken
+
+== Guest claims the vIRQ ==
+
+domu -> vplic : MMIO read\n  GUEST_PLIC_BASE + CONTEXT_BASE + ctx*CONTEXT_PER_HART + CONTEXT_CLAIM
+vplic -> vplic : vplic_emulate_load()\n  max_irq = vplic_claimed(ctx)\n  vplic_set_pending(max_irq, false)\n  vplic_set_claimed(max_irq, true)\n  vplic_update()\n(vplic.c:415-440)
+vplic --> domu : return vIRQ number
+
+domu -> domu : guest ISR services the (passthrough) device directly
+
+== Guest EOI ==
+
+domu -> vplic : MMIO write\n  GUEST_PLIC_BASE + CONTEXT_BASE + ... + CONTEXT_CLAIM = vIRQ
+vplic -> vplic : vplic_set_claimed(vIRQ, false)\n(vplic.c:363)
+vplic -> plic  : irq_to_desc(vIRQ)->handler->end(desc)\n  = plic_guest_irq_end()\n  writel(irq, plic_claim_cntx[irq]->reg_base + CONTEXT_CLAIM)\n(vplic.c:370 → plic.c:348-351)
+plic -> plic  : physical PLIC re-arms the source;\n  device may re-assert immediately if still pending
+vplic -> vplic : vplic_update()\n  clears vcpu's IRQ_VS_EXT if nothing else pending
+
+@enduml
