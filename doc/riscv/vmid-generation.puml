@@ -1,0 +1,96 @@
+@startuml vmid-generation
+title VMID generation/recycling — xen/arch/riscv/vmid.c (max_vmid=2 example)
+
+skinparam sequenceMessageAlign center
+skinparam participantPadding 20
+skinparam boxPadding 10
+
+participant "vcpu A\n(DomA)"    as A
+participant "vcpu B\n(DomB)"    as B
+participant "vcpu C\n(DomC)"    as C
+participant "hart-local state\ndata->generation\ndata->next_vmid\n(vmid.c:39-46)" as hart
+participant "hardware TLB\n(G-stage entries,\ntagged by VMID)" as tlb
+
+note over hart
+  vmid_init() — vmid.c:82
+  data->generation = 1
+  data->next_vmid  = 1
+  max_vmid = 2 (illustration)
+end note
+
+== t0 — vcpu A scheduled in (first ever run) ==
+
+A -> hart : vmid_handle_vmenter(&A.vmid)\n(vmid.c:135)
+hart -> hart : A.generation(0) != data.generation(1)\n→ mismatch
+hart -> hart : pool not exhausted\n  next_vmid(1) <= max_vmid(2)
+hart -> hart : A.vmid = next_vmid++  → A.vmid=1\n  A.generation = data.generation (1)\n(vmid.c:156-157)
+hart -> A : return (A.vmid == 1) → true
+A -> tlb : hfence.gvma (caller flushes)\n harmless — TLB was cold anyway
+
+note over hart : next_vmid = 2
+
+== t1 — vcpu A descheduled, vcpu B scheduled in (first run) ==
+
+B -> hart : vmid_handle_vmenter(&B.vmid)
+hart -> hart : B.generation(0) != data.generation(1)\n→ mismatch
+hart -> hart : pool not exhausted\n  next_vmid(2) <= max_vmid(2)
+hart -> hart : B.vmid = next_vmid++  → B.vmid=2\n  B.generation = 1
+hart -> B : return (B.vmid == 1) → false\n→ no flush
+
+note over hart : next_vmid = 3
+
+note over tlb
+  hardware TLB now holds:
+    VMID=1 entries → DomA's p2m translations
+    VMID=2 entries → DomB's p2m translations
+end note
+
+== t2 — vcpu A scheduled back in ==
+
+A -> hart : vmid_handle_vmenter(&A.vmid)
+hart -> hart : A.generation(1) == data.generation(1)\n→ match
+hart -> A : return false (vmid.c:143-144)\n→ no flush, no reassignment
+note over A : reuses VMID=1\nTLB entries tagged 1 are still\nexactly DomA's mappings — safe
+
+== t3 — vcpu B scheduled back in ==
+
+B -> hart : vmid_handle_vmenter(&B.vmid)
+hart -> hart : B.generation(1) == data.generation(1)\n→ match
+hart -> B : return false → no flush
+note over B : reuses VMID=2 for free
+
+== t4 — a third domain's vcpu C wants in (pool exhausted) ==
+
+C -> hart : vmid_handle_vmenter(&C.vmid)
+hart -> hart : C.generation(0) != data.generation(1)\n→ mismatch
+hart -> hart : pool exhausted!\n  next_vmid(3) > max_vmid(2)
+hart -> hart : vmid_flush_hart()\n  data->generation++ → 2\n  next_vmid = 1\n(vmid.c:116-133, called from vmid.c:149)
+hart -> hart : C.vmid = next_vmid++  → C.vmid=1\n  C.generation = data.generation (2)
+hart -> C : return (C.vmid == 1) → true
+C -> tlb : hfence.gvma (real flush, mandatory this time)
+
+note over tlb
+  Why mandatory: VMID=1 in hardware still held
+  DomA's stale entries from t0. C is handed the
+  same number 1, tagged generation 2. Without the
+  flush those stale entries could wrongly be seen
+  as valid for C, aliasing DomA's translations into
+  DomC's guest-physical address space. The flush
+  wipes VMID=1 clean so it means only DomC now.
+end note
+
+== t5 — vcpu A scheduled back in after the wrap ==
+
+A -> hart : vmid_handle_vmenter(&A.vmid)
+hart -> hart : A.generation(1) != data.generation(2)\n→ mismatch\n(even though A.vmid was 1, same\nnumber DomC now holds)
+hart -> hart : pool not exhausted\n  next_vmid(2) <= max_vmid(2)
+hart -> hart : A.vmid = next_vmid++  → A.vmid=2\n  A.generation = 2
+hart -> A : return (A.vmid == 1) → false\n→ no flush
+
+note over A
+  No flush needed: slot 2 was never used
+  in generation 2 yet, so no stale aliasing
+  possible for this assignment.
+end note
+
+@enduml
