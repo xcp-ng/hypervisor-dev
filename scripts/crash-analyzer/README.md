@@ -18,7 +18,9 @@ unavailable. The symbol file must contain DWARF debug information; a stripped
 Xen binary or a plain `nm` output file is not sufficient for structure layouts.
 Scalar and pointer arrays are expanded into indexed entries such as
 `evtchn_group[0]`; partially captured elements show `<unavailable>` and wholly
-omitted elements are skipped. With `--all`, complete arrays are printed as lists.
+omitted elements are skipped. Arrays and nested fields are expanded in both
+output modes. `--all` only bypasses context-based member selection, showing all
+union branches, including PV/HVM, VMX/SVM, and nested NVMX/NSVM variants.
 For `struct domain`, the active `arch` PV/HVM union branch is selected from the
 DWARF-resolved `options` field and Xen's fixed public HVM domain flag. If the
 abridged dump does not contain `options`, the branch cannot be selected and is
