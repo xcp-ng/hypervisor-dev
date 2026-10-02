@@ -7,7 +7,6 @@ import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal, cast
 
 from .dump import StructureDump, load_dump
 from .dwarf import Member, ObservedValue, Structure, SymbolFile, TypeContext
@@ -62,8 +61,9 @@ def _print_dump(
 ) -> None:
     vcpu = f", vcpu {dump.vcpu}" if dump.vcpu is not None else ""
     vm = f", {context.vm_type.upper()} VM" if context.vm_type is not None else ""
+    backend = f", {context.hvm_backend.upper()}" if context.hvm_backend is not None else ""
     print(f"{dump.declared_type} @ 0x{dump.address:016x}{vcpu}")
-    print(f"resolved as {layout.kind} {layout.name}, {layout.size or '?'} bytes{vm}")
+    print(f"resolved as {layout.kind} {layout.name}, {layout.size or '?'} bytes{vm}{backend}")
     if not show_all:
         for value in layout.observed_values(dump.bytes, context):
             offset = f"0x{value.offset:04x}"
@@ -107,13 +107,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             domain_contexts = {
                 dump.address: layout.context(dump.bytes)
                 for dump, layout in zip(dumps, layouts, strict=True)
-                if layout.name == "domain" and layout.context(dump.bytes).vm_type is not None
+                if layout.name == "domain"
             }
             resolved: list[dict[str, object]] = []
             for dump, layout in zip(dumps, layouts, strict=True):
-                vm_type = layout.vm_type(dump.bytes)
                 context = layout.context(dump.bytes)
-                if vm_type is None and layout.name == "vcpu":
+                if layout.name == "vcpu":
                     domain_member = next(
                         (member for member in layout.members if member.name == "domain"), None
                     )
@@ -123,11 +122,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                             context = domain_contexts.get(
                                 int.from_bytes(domain_pointer, symbols.byteorder), TypeContext()
                             )
-                if context.vm_type is None and vm_type is not None:
-                    context = TypeContext(
-                        vm_type=cast(Literal["pv", "hvm"], vm_type),
-                        nested_virt=context.nested_virt,
-                    )
                 if args.json:
                     resolved.append(
                         {
@@ -135,6 +129,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                             "address": f"0x{dump.address:x}",
                             "vcpu": dump.vcpu,
                             "vm_type": context.vm_type,
+                            "hvm_backend": context.hvm_backend,
                             "layout": _layout_dict(layout),
                             "members": (
                                 [_member_dict(layout, member, dump) for member in layout.members]

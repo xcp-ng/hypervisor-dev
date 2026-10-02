@@ -21,9 +21,14 @@ DWARF-resolved `options` field and Xen's fixed public HVM domain flag. If the
 abridged dump does not contain `options`, the branch cannot be selected and is
 left unresolved. A `struct vcpu` inherits this information when its captured
 `domain` pointer refers to a dumped domain.
-The VMX/SVM union has no discriminator field in Xen's structures, so both
-branches remain separately labeled. The nested NVMX/NSVM union is hidden when
-the domain's nested-virtualization flag is clear.
+The VMX/SVM backend is resolved from the domain's captured `arch.ctxt_switch`
+pointer. The analyzer reads the constant table from the matching ELF file and
+checks its three function pointers against the VMX/SVM function symbols. The
+backend selects the VMX/SVM and nested NVMX/NSVM union branches and is included
+as `hvm_backend` in JSON output. Missing bytes, symbols, or an address that does
+not match the ELF leave both branches visible. A `struct vcpu` inherits the
+backend from its dumped domain. The nested union is hidden when the domain's
+nested-virtualization flag is clear.
 Known Xen `spinlock_t` values are summarized as one line with lock state, ticket
 head/tail, recursive owner, and recursion depth. Use `pahole` for full type
 layouts.
