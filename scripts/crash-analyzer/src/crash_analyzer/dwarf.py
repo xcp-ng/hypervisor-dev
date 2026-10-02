@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from math import prod
 from pathlib import Path
 from typing import Any, Final, Literal
 
@@ -188,7 +189,29 @@ class SymbolFile:
             return size
         if type_die.tag == "DW_TAG_pointer_type":
             return self.pointer_size
+        if type_die.tag == "DW_TAG_array_type":
+            shape = self._array_shape(type_die)
+            element_size = self._size(self._type_die(type_die))
+            return None if shape is None or element_size is None else element_size * prod(shape)
         return self._size(self._type_die(type_die))
+
+    @staticmethod
+    def _array_shape(type_die: Any) -> tuple[int, ...] | None:
+        dimensions = []
+        for child in type_die.iter_children():
+            if child.tag != "DW_TAG_subrange_type":
+                continue
+            count = _attribute(child, "DW_AT_count")
+            if not isinstance(count, int):
+                upper = _attribute(child, "DW_AT_upper_bound")
+                lower = _attribute(child, "DW_AT_lower_bound") or 0
+                if not isinstance(upper, int) or not isinstance(lower, int):
+                    return None
+                count = upper - lower + 1
+            if count < 0:
+                return None
+            dimensions.append(count)
+        return tuple(dimensions) if dimensions else None
 
     def register_renderer(self, renderer: TypeRenderer) -> None:
         """Register a type renderer, giving it precedence over built-ins."""
@@ -332,7 +355,7 @@ class SymbolFile:
             member_type = self._type_die(child)
             members.append(
                 Member(
-                    name=_name(child) or "<anonymous>",
+                    name=_name(child) or "<?>",
                     type_die=member_type,
                     offset=offset,
                     size=self._size(member_type),
@@ -360,6 +383,9 @@ class SymbolFile:
             return f"{self.type_name(self._type_die(type_die))} *"
         if tag == "DW_TAG_array_type":
             element = self.type_name(self._type_die(type_die))
+            shape = self._array_shape(type_die)
+            if shape is not None:
+                return f"{element}[{']['.join(str(count) for count in shape)}]"
             bounds: list[str] = []
             for child in type_die.iter_children():
                 upper = _attribute(child, "DW_AT_upper_bound")
@@ -371,11 +397,11 @@ class SymbolFile:
             qualifier = tag.removeprefix("DW_TAG_").removesuffix("_type")
             return f"{qualifier} {self.type_name(self._type_die(type_die))}"
         if tag == "DW_TAG_structure_type":
-            return f"struct {_name(type_die) or '<anonymous>'}"
+            return f"struct {_name(type_die) or '<?>'}"
         if tag == "DW_TAG_union_type":
-            return f"union {_name(type_die) or '<anonymous>'}"
+            return f"union {_name(type_die) or '<?>'}"
         if tag == "DW_TAG_enumeration_type":
-            return f"enum {_name(type_die) or '<anonymous>'}"
+            return f"enum {_name(type_die) or '<?>'}"
         return _name(type_die) or tag.removeprefix("DW_TAG_")
 
     def decode(self, type_die: Any | None, data: bytes) -> str:
@@ -406,6 +432,28 @@ class SymbolFile:
             signed = encoding in _SIGNED_ENCODINGS
             return str(int.from_bytes(data, self.byteorder, signed=signed))
         if type_die.tag == "DW_TAG_array_type":
+            shape = self._array_shape(type_die)
+            element_type = self._type_die(type_die)
+            element_size = self._size(element_type)
+            if shape is not None and element_size is not None and element_size > 0:
+
+                def render_array(dimensions: tuple[int, ...], raw: bytes) -> str:
+                    stride = element_size * prod(dimensions[1:])
+                    values = []
+                    for index in range(dimensions[0]):
+                        item = raw[index * stride : (index + 1) * stride]
+                        if len(item) != stride:
+                            value = "<unavailable>"
+                        elif len(dimensions) > 1:
+                            value = render_array(dimensions[1:], item)
+                        else:
+                            value = self.render_value(element_type, item) or self.decode(
+                                element_type, item
+                            )
+                        values.append(value)
+                    return f"[{', '.join(values)}]"
+
+                return render_array(shape, data)
             return f"<{self.type_name(type_die)}: {len(data)} bytes>"
         if type_die.tag in _STRUCTURE_TAGS:
             return f"<{self.type_name(type_die)}: {len(data)} bytes>"
@@ -536,6 +584,7 @@ class Structure:
         bit_size: int | None = None,
         bit_offset: int | None = None,
         context: TypeContext | None = None,
+        all_branches: bool = False,
     ) -> list[ObservedValue]:
         if depth > 16:
             return []
@@ -562,7 +611,8 @@ class Structure:
             children = [
                 child for child in underlying.iter_children() if child.tag == "DW_TAG_member"
             ]
-            children = self.symbols.select_members(type_die, children, context or TypeContext())
+            if not all_branches:
+                children = self.symbols.select_members(type_die, children, context or TypeContext())
             for child in children:
                 child_type = self.symbols._type_die(child)
                 child_offset = _attribute(child, "DW_AT_data_member_location")
@@ -570,7 +620,7 @@ class Structure:
                     child_offset = 0 if underlying.tag == "DW_TAG_union_type" else None
                 if child_offset is None:
                     continue
-                child_name = _name(child) or "<anonymous>"
+                child_name = _name(child) or "<?>"
                 values.extend(
                     self._observed_type(
                         child_type,
@@ -581,6 +631,7 @@ class Structure:
                         _attribute(child, "DW_AT_bit_size"),
                         _attribute(child, "DW_AT_bit_offset"),
                         context,
+                        all_branches,
                     )
                 )
             if values:
@@ -599,16 +650,8 @@ class Structure:
         if underlying.tag == "DW_TAG_array_type":
             element_type = self.symbols._type_die(underlying)
             element_size = self.symbols._size(element_type)
-            subranges = list(underlying.iter_children())
-            upper = _attribute(subranges[0], "DW_AT_upper_bound") if subranges else None
-            count = upper + 1 if isinstance(upper, int) else None
-            element_underlying = self.symbols._underlying(element_type)
-            if (
-                count is None
-                or element_size is None
-                or element_underlying is None
-                or element_underlying.tag not in _STRUCTURE_TAGS | {"DW_TAG_array_type"}
-            ):
+            shape = self.symbols._array_shape(underlying)
+            if shape is None or element_size is None or element_size <= 0:
                 raw = self._value(data, offset, size)
                 return [
                     ObservedValue(
@@ -620,15 +663,32 @@ class Structure:
                     )
                 ]
             values = []
-            for index in range(count):
+            # Visit only elements touched by this sparse dump, including partial
+            # elements, without iterating every slot in a potentially large array.
+            array_end = offset + prod(shape) * element_size
+            indices = sorted(
+                {
+                    (position - offset) // element_size
+                    for position in data
+                    if offset <= position < array_end
+                }
+            )
+            for index in indices:
+                remainder = index
+                subscripts = []
+                for dimension in reversed(shape):
+                    remainder, subscript = divmod(remainder, dimension)
+                    subscripts.append(subscript)
+                suffix = "".join(f"[{subscript}]" for subscript in reversed(subscripts))
                 values.extend(
                     self._observed_type(
                         element_type,
                         offset + index * element_size,
-                        f"{path}[{index}]",
+                        f"{path}{suffix}",
                         data,
                         depth + 1,
                         context=context,
+                        all_branches=all_branches,
                     )
                 )
             return values
@@ -649,9 +709,13 @@ class Structure:
         ]
 
     def observed_values(
-        self, data: dict[int, int], context: TypeContext | None = None
+        self,
+        data: dict[int, int],
+        context: TypeContext | None = None,
+        *,
+        all_branches: bool = False,
     ) -> list[ObservedValue]:
-        """Expand captured bytes into sparse leaf values using the type layout."""
+        """Expand captured leaves, optionally bypassing context-based member selection."""
 
         values: list[ObservedValue] = []
         if context is None:
@@ -672,6 +736,7 @@ class Structure:
                         member.name,
                         data,
                         context=context,
+                        all_branches=all_branches,
                     )
                 )
         return values

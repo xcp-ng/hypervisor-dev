@@ -63,7 +63,7 @@ def test_sample_xen_types() -> None:
         pv_data.update({union_offset + index: index + 1 for index in range(8)})
         pv_paths = {value.path for value in domain.observed_values(pv_data)}
         assert domain.vm_type(pv_data) == "pv"
-        assert "arch.<anonymous>.pv.gdt_ldt_l1tab" in pv_paths
+        assert "arch.<?>.pv.gdt_ldt_l1tab" in pv_paths
         assert not any(".hvm." in path for path in pv_paths)
 
         hvm_data = {
@@ -73,7 +73,7 @@ def test_sample_xen_types() -> None:
         hvm_data.update({union_offset + index: index + 1 for index in range(24)})
         hvm_paths = {value.path for value in domain.observed_values(hvm_data)}
         assert domain.vm_type(hvm_data) == "hvm"
-        assert "arch.<anonymous>.hvm.ioreq_gfn.base" in hvm_paths
+        assert "arch.<?>.hvm.ioreq_gfn.base" in hvm_paths
         assert not any(".pv." in path for path in hvm_paths)
 
         # Resolve real constant tables from the ELF, including Xen's writable
@@ -110,10 +110,10 @@ def test_sample_xen_types() -> None:
                 arch_data, TypeContext(vm_type="hvm", nested_virt=True)
             )
         }
-        assert "arch.<anonymous>.hvm.<anonymous>.vmx.vmcs_pa" in vmx_paths
-        assert "arch.<anonymous>.hvm.nvcpu.u.nvmx.vmxon_region_pa" in vmx_paths
-        assert "arch.<anonymous>.hvm.<anonymous>.svm.vmcb" in vmx_paths
-        assert "arch.<anonymous>.hvm.nvcpu.u.nsvm.ns_gif" in vmx_paths
+        assert "arch.<?>.hvm.<?>.vmx.vmcs_pa" in vmx_paths
+        assert "arch.<?>.hvm.nvcpu.u.nvmx.vmxon_region_pa" in vmx_paths
+        assert "arch.<?>.hvm.<?>.svm.vmcb" in vmx_paths
+        assert "arch.<?>.hvm.nvcpu.u.nsvm.ns_gif" in vmx_paths
 
         no_nested_paths = {
             value.path
