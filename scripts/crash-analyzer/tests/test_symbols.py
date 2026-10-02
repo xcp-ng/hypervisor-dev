@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from crash_analyzer.dump import load_dump
-from crash_analyzer.dwarf import SymbolFile, TypeContext
+from crash_analyzer.dwarf import ANONYMOUS, SymbolFile, TypeContext
 
 SYMBOLS = Path(__file__).parents[3] / "xen-syms-4.17.6-12"
 
@@ -63,7 +63,7 @@ def test_sample_xen_types() -> None:
         pv_data.update({union_offset + index: index + 1 for index in range(8)})
         pv_paths = {value.path for value in domain.observed_values(pv_data)}
         assert domain.vm_type(pv_data) == "pv"
-        assert "arch.<?>.pv.gdt_ldt_l1tab" in pv_paths
+        assert f"arch.{ANONYMOUS}.pv.gdt_ldt_l1tab" in pv_paths
         assert not any(".hvm." in path for path in pv_paths)
 
         hvm_data = {
@@ -73,7 +73,7 @@ def test_sample_xen_types() -> None:
         hvm_data.update({union_offset + index: index + 1 for index in range(24)})
         hvm_paths = {value.path for value in domain.observed_values(hvm_data)}
         assert domain.vm_type(hvm_data) == "hvm"
-        assert "arch.<?>.hvm.ioreq_gfn.base" in hvm_paths
+        assert f"arch.{ANONYMOUS}.hvm.ioreq_gfn.base" in hvm_paths
         assert not any(".pv." in path for path in hvm_paths)
 
         # Resolve real constant tables from the ELF, including Xen's writable
@@ -110,10 +110,10 @@ def test_sample_xen_types() -> None:
                 arch_data, TypeContext(vm_type="hvm", nested_virt=True)
             )
         }
-        assert "arch.<?>.hvm.<?>.vmx.vmcs_pa" in vmx_paths
-        assert "arch.<?>.hvm.nvcpu.u.nvmx.vmxon_region_pa" in vmx_paths
-        assert "arch.<?>.hvm.<?>.svm.vmcb" in vmx_paths
-        assert "arch.<?>.hvm.nvcpu.u.nsvm.ns_gif" in vmx_paths
+        assert f"arch.{ANONYMOUS}.hvm.{ANONYMOUS}.vmx.vmcs_pa" in vmx_paths
+        assert f"arch.{ANONYMOUS}.hvm.nvcpu.u.nvmx.vmxon_region_pa" in vmx_paths
+        assert f"arch.{ANONYMOUS}.hvm.{ANONYMOUS}.svm.vmcb" in vmx_paths
+        assert f"arch.{ANONYMOUS}.hvm.nvcpu.u.nsvm.ns_gif" in vmx_paths
 
         no_nested_paths = {
             value.path
