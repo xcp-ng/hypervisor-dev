@@ -5,14 +5,26 @@ embedded in a Xen `xen-syms` ELF file. It understands the sparse form of the
 diagnostic output: regions represented by `...` remain unavailable instead of
 being treated as zero-filled memory.
 
-The project provides an inspection command:
+Pass the matching Xen symbol file first, followed by one or more dump files:
 
 ```console
-uv run crash-analyzer inspect dom0.structures.log xen-syms-4.17.6-12
-uv run crash-analyzer inspect dom0.structures.log xen-syms-4.17.6-12 --all
+uv run crash-analyzer xen-syms-4.17.6-12 dom0.structures.log
+uv run crash-analyzer xen-syms-4.17.6-12 dom0.structures.log dom5413.structures.log
+uv run crash-analyzer xen-syms-4.17.6-12 *.structures.log --all
 ```
 
-Use `--json` with `inspect` for machine-readable output. `inspect` follows
+The ELF/DWARF index and structure layouts are reused across the batch. Runtime
+domain and vCPU context is resolved separately for each dump file. Each input
+produces a separate output in the same directory: `dom5413.structures.log`
+becomes `dom5413.parsed.log`, or `dom5413.parsed.json` with `--json`. Other input
+names use their stem followed by `.parsed.log` or `.parsed.json`. The command
+prints the input-to-output paths; JSON records include a `source` path. Files are
+processed in argument order. A failed file is reported on stderr while the
+remaining files continue; any failure makes the command exit with status 2.
+Existing outputs are replaced only after a file finishes successfully.
+
+Full human-readable logs are written by default. Use `--json` explicitly for
+machine-readable output. The analyzer follows
 captured nested structure and array elements, while still leaving omitted bytes
 unavailable. The symbol file must contain DWARF debug information; a stripped
 Xen binary or a plain `nm` output file is not sufficient for structure layouts.
