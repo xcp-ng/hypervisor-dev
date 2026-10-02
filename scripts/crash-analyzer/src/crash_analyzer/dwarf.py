@@ -30,6 +30,10 @@ XEN_DOMCTL_CDF_hvm: Final = 1 << _XEN_DOMCTL_CDF_hvm
 _XEN_DOMCTL_CDF_nested_virt: Final = 6
 XEN_DOMCTL_CDF_nested_virt: Final = 1 << _XEN_DOMCTL_CDF_nested_virt
 
+# ANONYMOUS = "<anonymous>"
+# The name of anonymous structs/unions.
+ANONYMOUS = ""
+
 
 def _attribute(die: Any, name: str) -> Any | None:
     attribute = die.attributes.get(name)
@@ -355,7 +359,7 @@ class SymbolFile:
             member_type = self._type_die(child)
             members.append(
                 Member(
-                    name=_name(child) or "<?>",
+                    name=_name(child) or ANONYMOUS,
                     type_die=member_type,
                     offset=offset,
                     size=self._size(member_type),
@@ -397,11 +401,11 @@ class SymbolFile:
             qualifier = tag.removeprefix("DW_TAG_").removesuffix("_type")
             return f"{qualifier} {self.type_name(self._type_die(type_die))}"
         if tag == "DW_TAG_structure_type":
-            return f"struct {_name(type_die) or '<?>'}"
+            return f"struct {_name(type_die) or ANONYMOUS}"
         if tag == "DW_TAG_union_type":
-            return f"union {_name(type_die) or '<?>'}"
+            return f"union {_name(type_die) or ANONYMOUS}"
         if tag == "DW_TAG_enumeration_type":
-            return f"enum {_name(type_die) or '<?>'}"
+            return f"enum {_name(type_die) or ANONYMOUS}"
         return _name(type_die) or tag.removeprefix("DW_TAG_")
 
     def decode(self, type_die: Any | None, data: bytes) -> str:
@@ -620,7 +624,7 @@ class Structure:
                     child_offset = 0 if underlying.tag == "DW_TAG_union_type" else None
                 if child_offset is None:
                     continue
-                child_name = _name(child) or "<?>"
+                child_name = _name(child) or ANONYMOUS
                 values.extend(
                     self._observed_type(
                         child_type,
