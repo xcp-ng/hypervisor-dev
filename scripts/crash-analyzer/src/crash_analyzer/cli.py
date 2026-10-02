@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -13,6 +14,12 @@ from .dwarf import Member, ObservedValue, Structure, SymbolFile, TypeContext
 from .errors import CrashAnalyzerError
 
 
+def _is_padding(name: str) -> bool:
+    return any(
+        re.fullmatch(r"_?pad[0-9]*", part.split("[", 1)[0]) is not None for part in name.split(".")
+    )
+
+
 def _layout_dict(layout: Structure) -> dict[str, object]:
     return {
         "name": layout.name,
@@ -20,7 +27,11 @@ def _layout_dict(layout: Structure) -> dict[str, object]:
         "kind": layout.kind,
         "size": layout.size,
         "alignment": layout.alignment,
-        "members": [_member_dict(layout, member, None) for member in layout.members],
+        "members": [
+            _member_dict(layout, member, None)
+            for member in layout.members
+            if not _is_padding(member.name)
+        ],
     }
 
 
@@ -49,13 +60,6 @@ def _value_dict(layout: Structure, value: ObservedValue) -> dict[str, object]:
     }
 
 
-def _should_show(member: Member, dump: StructureDump, show_all: bool) -> bool:
-    if show_all or member.offset is None or member.size is None:
-        return show_all
-    observed = dump.observed_offsets
-    return any(member.offset <= offset < member.offset + member.size for offset in observed)
-
-
 def _print_dump(
     dump: StructureDump, layout: Structure, show_all: bool, context: TypeContext
 ) -> None:
@@ -64,20 +68,13 @@ def _print_dump(
     backend = f", {context.hvm_backend.upper()}" if context.hvm_backend is not None else ""
     print(f"{dump.declared_type} @ 0x{dump.address:016x}{vcpu}")
     print(f"resolved as {layout.kind} {layout.name}, {layout.size or '?'} bytes{vm}{backend}")
-    if not show_all:
-        for value in layout.observed_values(dump.bytes, context):
-            offset = f"0x{value.offset:04x}"
-            member_type = layout.symbols.type_name(value.type_die)
-            rendered = value.value or "<unavailable>"
-            print(f"  {offset:>6} {value.path:<48} {member_type:<36} {rendered}")
-        return
-    for member in layout.members:
-        if not _should_show(member, dump, show_all):
+    for value in layout.observed_values(dump.bytes, context, all_branches=show_all):
+        if _is_padding(value.path):
             continue
-        offset = "?" if member.offset is None else f"0x{member.offset:04x}"
-        value = layout.value_for(member, dump.bytes) or "<unavailable>"
-        member_type = layout.symbols.type_name(member.type_die)
-        print(f"  {offset:>6} {member.name:<32} {member_type:<36} {value}")
+        offset = f"0x{value.offset:04x}"
+        member_type = layout.symbols.type_name(value.type_die)
+        rendered = value.value or "<unavailable>"
+        print(f"  {offset:>6} {value.path:<48} {member_type:<36} {rendered}")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -88,7 +85,9 @@ def _parser() -> argparse.ArgumentParser:
     inspect.add_argument("dump", type=Path, help="structure dump text file")
     inspect.add_argument("symbols", type=Path, help="Xen ELF symbol file with DWARF information")
     inspect.add_argument(
-        "--all", action="store_true", help="also print members absent from an abridged dump"
+        "--all",
+        action="store_true",
+        help="also print union branches excluded by the resolved context",
     )
     inspect.add_argument("--json", action="store_true", help="emit JSON")
     return parser
@@ -131,14 +130,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                             "vm_type": context.vm_type,
                             "hvm_backend": context.hvm_backend,
                             "layout": _layout_dict(layout),
-                            "members": (
-                                [_member_dict(layout, member, dump) for member in layout.members]
-                                if args.all
-                                else [
-                                    _value_dict(layout, value)
-                                    for value in layout.observed_values(dump.bytes, context)
-                                ]
-                            ),
+                            "members": [
+                                _value_dict(layout, value)
+                                for value in layout.observed_values(
+                                    dump.bytes, context, all_branches=args.all
+                                )
+                                if not _is_padding(value.path)
+                            ],
                         }
                     )
                 else:
