@@ -71,6 +71,7 @@ class TypeContext:
 
     vm_type: Literal["pv", "hvm"] | None = None
     nested_virt: bool | None = None
+    hvm_backend: Literal["vmx", "svm"] | None = None
 
 
 class SymbolFile:
@@ -102,6 +103,8 @@ class SymbolFile:
         self._renderers = [*(renderers or ()), SpinlockRenderer()]
         self._selectors = [*(selectors or ()), VmBranchSelector()]
         self._named: dict[str, list[Any]] = {}
+        self._csw_backends: dict[int, Literal["vmx", "svm"] | None] = {}
+        self._csw_functions: dict[str, int] | None = None
         self._index_types()
 
     def __enter__(self) -> SymbolFile:
@@ -225,6 +228,84 @@ class SymbolFile:
         """Register a member selector, giving it precedence over built-ins."""
 
         self._selectors.insert(0, selector)
+
+    def hvm_backend(self, address: int) -> Literal["vmx", "svm"] | None:
+        """Identify a constant ``arch_csw`` table using exact ELF function symbols.
+
+        Addresses must match this ELF's address space. Unavailable tables or
+        symbols leave the backend unknown rather than guessing from union bytes.
+        """
+
+        if address in self._csw_backends:
+            return self._csw_backends[address]
+        backend = self._hvm_backend(address)
+        self._csw_backends[address] = backend
+        return backend
+
+    def _hvm_backend(self, address: int) -> Literal["vmx", "svm"] | None:
+        if not address:
+            return None
+        if self._csw_functions is None:
+            names = {
+                f"{backend}_{function}"
+                for backend in ("vmx", "svm")
+                for function in ("ctxt_switch_from", "ctxt_switch_to", "do_resume")
+            }
+            symtab = self._elf.get_section_by_name(".symtab")
+            self._csw_functions = (
+                {
+                    symbol.name: symbol["st_value"]
+                    for symbol in symtab.iter_symbols()
+                    if symbol.name in names
+                    and symbol["st_info"]["type"] == "STT_FUNC"
+                    and symbol["st_shndx"] != "SHN_UNDEF"
+                }
+                if symtab is not None
+                else {}
+            )
+        if not self._csw_functions:
+            return None
+        try:
+            layout = self.structure("struct arch_csw")
+        except CrashAnalyzerError:
+            return None
+        if layout.size is None:
+            return None
+        raw = None
+        for section in self._elf.iter_sections():
+            start = section["sh_addr"]
+            # Only constant, allocated file bytes are authoritative here.
+            if (
+                section["sh_type"] == "SHT_PROGBITS"
+                and section["sh_flags"] & 2  # SHF_ALLOC
+                # Xen's ELF can mark .rodata writable for boot-time fixups.
+                and (not section["sh_flags"] & 1 or section.name == ".rodata")
+                and start <= address
+                and address + layout.size <= start + section["sh_size"]
+            ):
+                raw = section.data()[address - start : address - start + layout.size]
+                break
+        if raw is None or len(raw) != layout.size:
+            return None
+        functions = {}
+        for member in layout.members:
+            if member.name not in {"from", "to", "tail"}:
+                continue
+            if member.offset is None or member.size is None or member.size != self.pointer_size:
+                return None
+            value = raw[member.offset : member.offset + member.size]
+            if len(value) != member.size:
+                return None
+            functions[member.name] = int.from_bytes(value, self.byteorder)
+        for backend in ("vmx", "svm"):
+            expected = {
+                "from": self._csw_functions.get(f"{backend}_ctxt_switch_from"),
+                "to": self._csw_functions.get(f"{backend}_ctxt_switch_to"),
+                "tail": self._csw_functions.get(f"{backend}_do_resume"),
+            }
+            if all(value is not None for value in expected.values()) and functions == expected:
+                return backend
+        return None
 
     def _alignment(self, type_die: Any | None) -> int | None:
         underlying = self._underlying(type_die)
@@ -378,23 +459,44 @@ class Structure:
         )
         return "hvm" if options & XEN_DOMCTL_CDF_hvm else "pv"
 
+    def _hvm_backend(self, data: dict[int, int]) -> Literal["vmx", "svm"] | None:
+        arch_member = next((member for member in self.members if member.name == "arch"), None)
+        if arch_member is None or arch_member.offset is None:
+            return None
+        arch_die = self.symbols._underlying(arch_member.type_die)
+        if arch_die is None:
+            return None
+        for child in arch_die.iter_children():
+            if child.tag != "DW_TAG_member" or _name(child) != "ctxt_switch":
+                continue
+            offset = _attribute(child, "DW_AT_data_member_location")
+            if not isinstance(offset, int):
+                return None
+            raw = self._value(data, arch_member.offset + offset, self.symbols.pointer_size)
+            if raw is None:
+                return None
+            return self.symbols.hvm_backend(int.from_bytes(raw, self.symbols.byteorder))
+        return None
+
     def context(self, data: dict[int, int]) -> TypeContext:
-        """Resolve the domain's variant flags from its captured ``options``."""
+        """Resolve domain flags and its backend-specific context-switch table."""
 
         if self.name != "domain":
             return TypeContext()
+        backend = self._hvm_backend(data)
         options_member = next((member for member in self.members if member.name == "options"), None)
         if options_member is None or options_member.offset is None or options_member.size is None:
-            return TypeContext()
+            return TypeContext(hvm_backend=backend)
         values = [data.get(options_member.offset + index) for index in range(options_member.size)]
         if any(value is None for value in values):
-            return TypeContext()
+            return TypeContext(hvm_backend=backend)
         options = int.from_bytes(
             bytes(value for value in values if value is not None), self.symbols.byteorder
         )
         return TypeContext(
             vm_type="hvm" if options & XEN_DOMCTL_CDF_hvm else "pv",
             nested_virt=bool(options & XEN_DOMCTL_CDF_nested_virt),
+            hvm_backend=backend if options & XEN_DOMCTL_CDF_hvm else None,
         )
 
     def value_for(self, member: Member, data: dict[int, int]) -> str | None:
@@ -556,7 +658,11 @@ class Structure:
             context = self.context(data)
         elif context.vm_type is None:
             detected = self.context(data)
-            context = TypeContext(vm_type=detected.vm_type, nested_virt=context.nested_virt)
+            context = TypeContext(
+                vm_type=detected.vm_type,
+                nested_virt=context.nested_virt,
+                hvm_backend=context.hvm_backend or detected.hvm_backend,
+            )
         for member in self.members:
             if member.offset is not None:
                 values.extend(

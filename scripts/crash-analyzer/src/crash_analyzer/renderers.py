@@ -26,6 +26,7 @@ class SelectorContext(Protocol):
 
     vm_type: Literal["pv", "hvm"] | None
     nested_virt: bool | None
+    hvm_backend: Literal["vmx", "svm"] | None
 
 
 class MemberSelector(Protocol):
@@ -121,9 +122,13 @@ class VmBranchSelector:
             return [member for member in members if _name(member) == active]
 
         if {"vmx", "svm"} <= member_names:
-            return None
-        if {"nvmx", "nsvm"} <= member_names and context.nested_virt is False:
-            return []
+            active = context.hvm_backend
+            return None if active is None else [m for m in members if _name(m) == active]
+        if {"nvmx", "nsvm"} <= member_names:
+            if context.nested_virt is False:
+                return []
+            active = context.hvm_backend
+            return None if active is None else [m for m in members if _name(m) == f"n{active}"]
         return None
 
 

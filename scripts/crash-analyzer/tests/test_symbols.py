@@ -76,6 +76,30 @@ def test_sample_xen_types() -> None:
         assert "arch.<anonymous>.hvm.ioreq_gfn.base" in hvm_paths
         assert not any(".pv." in path for path in hvm_paths)
 
+        # Resolve real constant tables from the ELF, including Xen's writable
+        # .rodata section, rather than relying on union-value heuristics.
+        csw_tables = {
+            symbols.hvm_backend(symbol["st_value"]): symbol["st_value"]
+            for symbol in symbols._elf.get_section_by_name(".symtab").iter_symbols()
+            if symbol.name.startswith("csw.")
+        }
+        arch_layout = symbols.structure("struct arch_domain")
+        csw_member = next(member for member in arch_layout.members if member.name == "ctxt_switch")
+        assert csw_member.offset is not None
+        for backend in ("vmx", "svm"):
+            backend_data = dict(hvm_data)
+            backend_data.update(
+                {
+                    arch.offset + csw_member.offset + index: value
+                    for index, value in enumerate(
+                        csw_tables[backend].to_bytes(symbols.pointer_size, symbols.byteorder)
+                    )
+                }
+            )
+            assert domain.context(backend_data) == TypeContext(
+                vm_type="hvm", nested_virt=False, hvm_backend=backend
+            )
+
         arch_data = {640 + 384 + 448 + index: value for index, value in enumerate(range(8))}
         arch_data.update(
             {640 + 384 + 936 + 56 + index: value for index, value in enumerate(range(8))}
