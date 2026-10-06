@@ -32,6 +32,32 @@ class CommitMatchInfoFlag(Flag):
     PresentInRebaseOnto = auto()
     Dropped = auto()
     Added = auto()
+    CleanBackport = auto()
+    ModifiedBackport = auto()
+    UpstreamNotFound = auto()
+    NoCherryPickReference = auto()
+
+
+REBASE_FLAGS = [
+    CommitMatchInfoFlag.SameCommit,
+    CommitMatchInfoFlag.LooseMatch,
+    CommitMatchInfoFlag.MessageChanged,
+    CommitMatchInfoFlag.PresentInRebaseOnto,
+    CommitMatchInfoFlag.Dropped,
+    CommitMatchInfoFlag.Added,
+]
+
+BACKPORT_FLAGS = [
+    CommitMatchInfoFlag.CleanBackport,
+    CommitMatchInfoFlag.ModifiedBackport,
+    CommitMatchInfoFlag.UpstreamNotFound,
+    CommitMatchInfoFlag.NoCherryPickReference,
+]
+
+
+class Mode(Enum):
+    Rebase = auto()
+    Backports = auto()
 
 
 class CommitMatchInfo:
@@ -65,6 +91,26 @@ commit_match_info_repr = {
     ),
     CommitMatchInfoFlag.Added: CommitMatchInfo(
         CommitMatchInfoFlag.Added, Text("✚", SolarizedColors.Green), "Commit added in rebase"
+    ),
+    CommitMatchInfoFlag.CleanBackport: CommitMatchInfo(
+        CommitMatchInfoFlag.CleanBackport,
+        Text("=", SolarizedColors.Green),
+        "Backport has the same patchid as upstream",
+    ),
+    CommitMatchInfoFlag.ModifiedBackport: CommitMatchInfo(
+        CommitMatchInfoFlag.ModifiedBackport,
+        Text("~", SolarizedColors.Yellow),
+        "Backport patchid differs from upstream",
+    ),
+    CommitMatchInfoFlag.UpstreamNotFound: CommitMatchInfo(
+        CommitMatchInfoFlag.UpstreamNotFound,
+        Text("?", SolarizedColors.Red),
+        "Cherry-picked commit not found in the repository",
+    ),
+    CommitMatchInfoFlag.NoCherryPickReference: CommitMatchInfo(
+        CommitMatchInfoFlag.NoCherryPickReference,
+        Text("✗", SolarizedColors.Red),
+        "No cherry-picked commit in the message",
     ),
 }
 

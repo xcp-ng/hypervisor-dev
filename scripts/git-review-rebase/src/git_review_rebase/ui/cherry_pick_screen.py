@@ -24,10 +24,10 @@ def _name_rev(repo: pygit2.Repository, commit: pygit2.Commit) -> str:
     return "" if name == "undefined" else name
 
 
-def _commit_cell(repo: pygit2.Repository, commit: pygit2.Commit) -> Text:
+def _commit_cell(repo: pygit2.Repository, commit: pygit2.Commit, name_rev: bool) -> Text:
     c = Text("")
     c.append(abbrev(commit.id), SolarizedColors.Yellow)
-    name = _name_rev(repo, commit)
+    name = _name_rev(repo, commit) if name_rev else ""
     if name:
         c.append(f" ({name})", SolarizedColors.Red)
     c.append(f" {commit_title(commit)}")
@@ -62,12 +62,14 @@ class CherryPickScreen(ModalScreen):
         right_commit: pygit2.Commit,
         cherry_pick_commits: list[pygit2.Commit],
         repo: pygit2.Repository,
+        name_rev: bool = True,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.right_commit = right_commit
         self.cherry_pick_commits = cherry_pick_commits
         self.repo = repo
+        self.name_rev = name_rev
 
     def compose(self) -> ComposeResult:
         with Vertical(id="cherry_pick_dialog"):
@@ -85,7 +87,7 @@ class CherryPickScreen(ModalScreen):
         table.add_row(none_text, key="none")
 
         for commit in self.cherry_pick_commits:
-            table.add_row(_commit_cell(self.repo, commit), key=str(commit.id))
+            table.add_row(_commit_cell(self.repo, commit, self.name_rev), key=str(commit.id))
 
         table.focus()
 
