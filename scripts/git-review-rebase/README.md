@@ -41,6 +41,8 @@ An interactive TUI (Terminal User Interface) tool for reviewing rebased git bran
 pip install -e .
 ```
 
+This installs both the `git-review-rebase` and `git-review-backports` commands.
+
 ## Usage
 
 ```bash
@@ -51,6 +53,24 @@ git-review-rebase <base>..<left-branch> <onto_base>..<right-branch>
 
 - `--repository PATH`: Path to git repository (default: current directory)
 - `--no-cache`: Disable patchid caching
+
+### Reviewing backports
+
+```bash
+git-review-backports <base>..<branch> [PATH...]
+```
+
+`git-review-backports` uses the same UI to review a range of backported commits. Each commit is
+shown next to the upstream commit it was cherry-picked from: the last one referenced in its
+message, using any of the `(cherry picked from commit <sha1>)`, `commit <sha1> upstream` or
+`[ Upstream commit <sha1> ]` formats. Pressing `p` lets you pick another referenced commit.
+
+  | Icon | Meaning                                          |
+  | ---- | ------------------------------------------------ |
+  | `=`  | Clean backport (same patchid as upstream)        |
+  | `~`  | Modified backport (patchid differs)              |
+  | `?`  | Cherry-picked commit not found in the repository |
+  | `✗`  | No cherry-picked commit in the message           |
 
 ## Development
 

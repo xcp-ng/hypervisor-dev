@@ -29,13 +29,19 @@ class FilterScreen(ModalScreen):
 
     BINDINGS = [("escape", "cancel", "Cancel")]
 
-    def __init__(self, filters: dict[CommitMatchInfoFlag, FilterType], **kwargs):
+    def __init__(
+        self,
+        filters: dict[CommitMatchInfoFlag, FilterType],
+        flags: list[CommitMatchInfoFlag],
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.filters = filters
+        self.flags = flags
 
     def compose(self) -> ComposeResult:
         with Vertical(id="filter_dialog"):
-            for flag in CommitMatchInfoFlag:
+            for flag in self.flags:
                 with RadioSet(id=flag.name):
                     yield Label(
                         commit_match_info_repr[flag].character

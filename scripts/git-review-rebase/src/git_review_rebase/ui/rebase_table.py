@@ -8,6 +8,7 @@ from rich.text import Text
 from textual.message import Message
 from textual.widgets import DataTable
 
+from ..backport_matching import BackportMatches
 from ..commit_matching import RebasedCommitsMatches
 from ..constants import CommitMatchInfoFlag, FilterType, commit_match_info_repr
 from ..git_utils import cherry_pick_parents
@@ -32,6 +33,7 @@ class RebaseTable(DataTable):
     BINDINGS = [
         ("enter", "show_diff", "Show side-by-side diff"),
         ("c", "comment", "Comment commit"),
+        ("p", "pick_cherry_pick_source", "Pick cherry-picked commit"),
     ]
 
     def __init__(
@@ -44,14 +46,14 @@ class RebaseTable(DataTable):
         super().__init__(**kwargs)
         self.args = args
         self.repo = repo
-        self.rebased_commit_matches: None | RebasedCommitsMatches = None
+        self.rebased_commit_matches: None | RebasedCommitsMatches | BackportMatches = None
         self.filters = filters
         self.fuzzy_terms: None | list[str] = None
         self.search_bar = SearchBar(fuzzy=True)
         self.column_keys = [
-            self.add_column(self.args.left_range.split("..")[1], width=80),
+            self.add_column(self.args.left_title, width=80),
             self.add_column(Text("Match type")),
-            self.add_column(self.args.right_range.split("..")[1], width=80),
+            self.add_column(self.args.right_title, width=80),
         ]
 
     def action_comment(self) -> None:
@@ -63,6 +65,29 @@ class RebaseTable(DataTable):
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted):
         self.row_key = event.row_key
 
+    def _push_cherry_pick_screen(self, right_commit: pygit2.Commit) -> bool:
+        """Let the user pick the left commit among the cherry-picked ones, if any."""
+        cherry_commits: list[pygit2.Commit] = []
+        for sha1 in cherry_pick_parents(right_commit):
+            try:
+                commit = self.repo.get(pygit2.Oid(hex=sha1))
+                if isinstance(commit, pygit2.Commit):
+                    cherry_commits.append(commit)
+            except Exception:
+                pass
+        if not cherry_commits:
+            return False
+
+        def handle_selection(result, right: pygit2.Commit = right_commit) -> None:
+            if result is not False:
+                self.post_message(ShowDiff(result, right))
+
+        self.app.push_screen(
+            CherryPickScreen(right_commit, cherry_commits, self.repo, self.args.name_rev),
+            handle_selection,
+        )
+        return True
+
     def action_show_diff(self) -> None:
         assert self.rebased_commit_matches is not None
         assert isinstance(self.row_key.value, pygit2.Oid)
@@ -70,29 +95,18 @@ class RebaseTable(DataTable):
 
         if CommitMatchInfoFlag.Added in match.match_info:
             assert match.right_commit is not None
-            cherry_sha1s = cherry_pick_parents(match.right_commit)
-            if cherry_sha1s:
-                cherry_commits: list[pygit2.Commit] = []
-                for sha1 in cherry_sha1s:
-                    try:
-                        commit = self.repo.get(pygit2.Oid(hex=sha1))
-                        if isinstance(commit, pygit2.Commit):
-                            cherry_commits.append(commit)
-                    except Exception:
-                        pass
-                if cherry_commits:
-                    right_commit = match.right_commit
-
-                    def handle_selection(result, right: pygit2.Commit = right_commit) -> None:
-                        if result is not False:
-                            self.post_message(ShowDiff(result, right))
-
-                    self.app.push_screen(
-                        CherryPickScreen(right_commit, cherry_commits, self.repo), handle_selection
-                    )
-                    return
+            if self._push_cherry_pick_screen(match.right_commit):
+                return
 
         self.action_select_cursor()
+
+    def action_pick_cherry_pick_source(self) -> None:
+        assert self.rebased_commit_matches is not None
+        assert isinstance(self.row_key.value, pygit2.Oid)
+        match = self.rebased_commit_matches.commit_matches[self.row_key.value]
+
+        if match.right_commit is None or not self._push_cherry_pick_screen(match.right_commit):
+            self.notify("No cherry-picked commit found in this commit message")
 
     def on_mount(self) -> None:
         self.loading = True
@@ -129,7 +143,7 @@ class RebaseTable(DataTable):
         self.fuzzy_terms = fuzzy_terms
         self.reload_table()
 
-    def load_ranges(self, rebased_commit_matches: RebasedCommitsMatches) -> None:
+    def load_ranges(self, rebased_commit_matches: RebasedCommitsMatches | BackportMatches) -> None:
         self.rebased_commit_matches = rebased_commit_matches
         self.reload_table()
         self.update_column_widths()

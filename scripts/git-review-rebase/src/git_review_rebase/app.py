@@ -8,9 +8,10 @@ from textual.app import App, ComposeResult
 from textual.containers import Vertical
 from textual.widgets import DataTable, Footer, Header, Input
 
+from .backport_matching import BackportMatches
 from .branch_range import BranchRange
 from .commit_matching import RebasedCommitsMatches
-from .constants import CommitMatchInfoFlag, FilterType
+from .constants import BACKPORT_FLAGS, REBASE_FLAGS, CommitMatchInfoFlag, FilterType, Mode
 from .git_utils import oid
 from .ui.diff_table import CloseDiffTable, DiffTable
 from .ui.filter_screen import FilterScreen
@@ -52,14 +53,20 @@ class GitReviewRebase(App):
         return True
 
     def action_clear_filters(self) -> None:
-        self.apply_filters(dict.fromkeys(CommitMatchInfoFlag, FilterType.NoFilter))
+        self.apply_filters(dict.fromkeys(self.match_flags, FilterType.NoFilter))
 
     def __init__(self, args, **kwargs):
         super().__init__(**kwargs)
         self.args = args
         self.repo = pygit2.Repository(args.repository)
+        if args.mode == Mode.Backports:
+            self.title = "git-review-backports"
+            self.match_flags = BACKPORT_FLAGS
+        else:
+            self.title = "git-review-rebase"
+            self.match_flags = REBASE_FLAGS
         self.filters: dict[CommitMatchInfoFlag, FilterType] = dict.fromkeys(
-            CommitMatchInfoFlag, FilterType.NoFilter
+            self.match_flags, FilterType.NoFilter
         )
         self.rebase_table: None | RebaseTable = None
         self.diff_table: None | DiffTable = None
@@ -67,7 +74,7 @@ class GitReviewRebase(App):
         self.rebase_search_bar: None | Input = None
         self.left_range: None | BranchRange = None
         self.right_range: None | BranchRange = None
-        self.rebased_commits_matches: None | RebasedCommitsMatches = None
+        self.rebased_commits_matches: None | RebasedCommitsMatches | BackportMatches = None
         self.active_table: None | RebaseTable | DiffTable = None
 
     def action_toggle_theme(self) -> None:
@@ -110,7 +117,9 @@ class GitReviewRebase(App):
         self.refresh_bindings()
 
     def action_show_filters(self) -> None:
-        self.push_screen(FilterScreen(self.filters, name="Filters"), self.apply_filters)
+        self.push_screen(
+            FilterScreen(self.filters, self.match_flags, name="Filters"), self.apply_filters
+        )
 
     def apply_filters(self, filters: dict[CommitMatchInfoFlag, FilterType] | None) -> None:
         if not filters:
@@ -126,6 +135,24 @@ class GitReviewRebase(App):
     @work
     async def load_ranges(self) -> None:
         assert self.rebase_table is not None
+        if self.args.mode == Mode.Backports:
+            start, end = self.args.range.split("..", 1)
+            self.rebased_commits_matches = await asyncio.to_thread(
+                BackportMatches,
+                self.args,
+                self.repo,
+                start + "^{commit}",
+                end + "^{commit}",
+                self.args.cache_flags,
+            )
+        else:
+            await self._load_rebase_ranges()
+        assert self.rebased_commits_matches is not None
+        self.rebase_table.load_ranges(self.rebased_commits_matches)
+        self.rebase_table.focus()
+        self.refresh_bindings()
+
+    async def _load_rebase_ranges(self) -> None:
         merge_base = self.repo.merge_base(
             oid(self.repo, self.args.left_range.split("..")[1] + "^{commit}"),
             oid(self.repo, self.args.right_range.split("..")[1] + "^{commit}"),
@@ -150,9 +177,6 @@ class GitReviewRebase(App):
         self.rebased_commits_matches = RebasedCommitsMatches(
             self.args, self.repo, self.left_range, self.right_range
         )
-        self.rebase_table.load_ranges(self.rebased_commits_matches)
-        self.rebase_table.focus()
-        self.refresh_bindings()
 
     async def _open_diff(
         self,
