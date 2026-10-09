@@ -215,6 +215,7 @@ impl<W: Write> Converter<W> {
                 } else {
                     r.d(1) as u64
                 };
+                let nested_vmexit = (r.event & TRC_HVM_NESTEDFLAG) != 0;
                 self.out.event(
                     ts,
                     track,
@@ -223,6 +224,7 @@ impl<W: Write> Converter<W> {
                     &[
                         ("exit_reason", Arg::Uint(reason as u64)),
                         ("rip", Arg::Pointer(rip)),
+                        ("nested_vmexit", Arg::Uint(nested_vmexit as u64)),
                     ],
                 )?;
                 self.pcpus[cpu as usize].inner = Some(Inner::Exit);
