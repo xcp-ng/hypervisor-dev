@@ -4,17 +4,22 @@ import argparse
 import subprocess
 
 import pygit2
+from rich.style import Style
 from rich.text import Text
 from textual.message import Message
 from textual.widgets import DataTable
+from textual.widgets.data_table import CellDoesNotExist, RowKey
 
 from ..backport_matching import BackportMatches
 from ..commit_matching import RebasedCommitsMatches
-from ..constants import CommitMatchInfoFlag, FilterType, commit_match_info_repr
+from ..constants import CommitMatchInfoFlag, FilterType, SolarizedColors, commit_match_info_repr
 from ..git_utils import cherry_pick_parents
 from .cherry_pick_screen import CherryPickScreen
 from .search_bar import SearchBar
 from .utils import cell_from_commit
+
+# Rows related to the highlighted one, e.g. backports applied out of order with it.
+RELATED_ROW_STYLE = Style(bgcolor=SolarizedColors.Violet)
 
 
 class ShowDiff(Message):
@@ -49,6 +54,7 @@ class RebaseTable(DataTable):
         self.rebased_commit_matches: None | RebasedCommitsMatches | BackportMatches = None
         self.filters = filters
         self.fuzzy_terms: None | list[str] = None
+        self.related_rows: set[pygit2.Oid] = set()
         self.search_bar = SearchBar(fuzzy=True)
         self.column_keys = [
             self.add_column(self.args.left_title, width=80),
@@ -64,6 +70,42 @@ class RebaseTable(DataTable):
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted):
         self.row_key = event.row_key
+        related: set[pygit2.Oid] = set()
+        if isinstance(self.rebased_commit_matches, BackportMatches):
+            assert isinstance(event.row_key.value, pygit2.Oid)
+            related = self.rebased_commit_matches.out_of_order.get(event.row_key.value, set())
+        self.set_related_rows(related)
+
+    def set_related_rows(self, related_rows: set[pygit2.Oid]) -> None:
+        changed = self.related_rows ^ related_rows
+        self.related_rows = set(related_rows)
+        assert self.rebased_commit_matches is not None
+        for commit_oid in changed:
+            match = self.rebased_commit_matches.commit_matches[commit_oid]
+            left_cell, right_cell, _ = self.row_cells(commit_oid, match)
+            row_key = RowKey(commit_oid)  # type: ignore
+            try:
+                self.update_cell(row_key, self.column_keys[0], left_cell)
+                self.update_cell(row_key, self.column_keys[2], right_cell)
+            except CellDoesNotExist:
+                # Filtered out.
+                pass
+
+    def row_cells(self, commit_oid: pygit2.Oid, match) -> tuple[Text, Text, bool]:
+        """Return the left and right cells, and whether they match the fuzzy search."""
+        left_cell = cell_from_commit(match.left_commit)
+        right_cell = cell_from_commit(match.right_commit)
+        fuzzy_matched = True
+        for term in self.fuzzy_terms or []:
+            if term not in left_cell and term not in right_cell:
+                fuzzy_matched = False
+                break
+            left_cell.highlight_words([term], style="reverse")
+            right_cell.highlight_words([term], style="reverse")
+        if commit_oid in self.related_rows:
+            left_cell.stylize(RELATED_ROW_STYLE)
+            right_cell.stylize(RELATED_ROW_STYLE)
+        return left_cell, right_cell, fuzzy_matched
 
     def _push_cherry_pick_screen(self, right_commit: pygit2.Commit) -> bool:
         """Let the user pick the left commit among the cherry-picked ones, if any."""
@@ -169,23 +211,13 @@ class RebaseTable(DataTable):
                     case FilterType.Without:
                         if match_type in rebased_commit_match.match_info:
                             return True
-            if self.fuzzy_terms is not None and self.fuzzy_terms:
-                all_matched = True
-                for term in self.fuzzy_terms:
-                    if term not in left_cell and term not in right_cell:
-                        all_matched = False
-                        break
-                    left_cell.highlight_words([term], style="reverse")
-                    right_cell.highlight_words([term], style="reverse")
-                return not all_matched
-            return False
+            return not fuzzy_matched
 
         self.clear(columns=False)
 
         assert self.rebased_commit_matches is not None
         for commit_oid, rebased_commit_match in self.rebased_commit_matches.commit_matches.items():
-            left_cell = cell_from_commit(rebased_commit_match.left_commit)
-            right_cell = cell_from_commit(rebased_commit_match.right_commit)
+            left_cell, right_cell, fuzzy_matched = self.row_cells(commit_oid, rebased_commit_match)
 
             if commit_filtered_out():
                 continue
