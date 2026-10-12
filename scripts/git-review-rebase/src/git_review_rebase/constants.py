@@ -36,6 +36,7 @@ class CommitMatchInfoFlag(Flag):
     ModifiedBackport = auto()
     UpstreamNotFound = auto()
     NoCherryPickReference = auto()
+    OutOfOrder = auto()
 
 
 REBASE_FLAGS = [
@@ -52,6 +53,7 @@ BACKPORT_FLAGS = [
     CommitMatchInfoFlag.ModifiedBackport,
     CommitMatchInfoFlag.UpstreamNotFound,
     CommitMatchInfoFlag.NoCherryPickReference,
+    CommitMatchInfoFlag.OutOfOrder,
 ]
 
 
@@ -111,6 +113,11 @@ commit_match_info_repr = {
         CommitMatchInfoFlag.NoCherryPickReference,
         Text("✗", SolarizedColors.Red),
         "No cherry-picked commit in the message",
+    ),
+    CommitMatchInfoFlag.OutOfOrder: CommitMatchInfo(
+        CommitMatchInfoFlag.OutOfOrder,
+        Text("⇅", SolarizedColors.Magenta),
+        "Backport applied in a different order than upstream, touching the same functions",
     ),
 }
 

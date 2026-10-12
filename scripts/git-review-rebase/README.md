@@ -71,6 +71,12 @@ message, using any of the `(cherry picked from commit <sha1>)`, `commit <sha1> u
   | `~`  | Modified backport (patchid differs)              |
   | `?`  | Cherry-picked commit not found in the repository |
   | `✗`  | No cherry-picked commit in the message           |
+  | `⇅`  | Modified backport applied out of upstream order  |
+
+A modified backport gets `⇅` when it was applied in a different order than upstream relative to
+another backport touching the same functions (taken from the diff hunk headers), as reordering
+them may give cleaner backports. Pairs of clean backports are ignored. When such a backport is
+highlighted, the commits it was reordered with are highlighted too.
 
 ## Development
 
