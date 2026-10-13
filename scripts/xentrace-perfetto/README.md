@@ -7,6 +7,17 @@ with `trace_processor` SQL.
 
 No dependencies; the Perfetto protobuf is encoded by hand (`src/proto.rs`).
 
+# Installation
+
+You need Rust to build this project (see https://rust-lang.org/fr/tools/install/).
+
+```sh
+cargo install --path .
+
+# Or from the root of hypervisor-dev
+cargo install --path scripts/xentrace-perfetto
+```
+
 ## Usage
 
 ```sh
