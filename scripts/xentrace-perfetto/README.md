@@ -24,7 +24,7 @@ cargo install --path scripts/xentrace-perfetto
 cargo build --release
 
 # On the Xen host (cpu_mhz is the TSC frequency used for timestamps):
-xl info | grep cpu_mhz
+xl info cpu_mhz
 # On Xen/XCP-ng host, generate traces (all events, 10 seconds)
 xentrace -D -e all -T 10 trace.bin
 # Separately, convert the trace binary into perfetto trace.
