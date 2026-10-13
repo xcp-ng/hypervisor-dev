@@ -161,7 +161,7 @@ fn static_name(event: u32) -> Option<&'static str> {
         0x0008_200f => "intr",
         0x0008_2010 => "nmi",
         0x0008_2011 => "smi",
-        0x0008_2012 => "vmmcall",
+        0x0008_2012 => "hvm_hypercall",
         0x0008_2013 => "hlt",
         0x0008_2014 => "invlpg",
         0x0008_2015 => "mce",
