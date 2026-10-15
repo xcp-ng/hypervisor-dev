@@ -6,6 +6,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from commit_graph_tools import find_fixers_recursive
 
 MODULE = "commit_graph_tools.find_fixers_recursive"
@@ -422,13 +424,13 @@ def test_recursive_alias_mentions_report_the_matching_hash():
     with repository() as repo:
         base = commit(repo, "Base")
         original = commit(repo, "Original change")
-        merge_subject = "Merge tag 'fixes' of git://example.com/subsystem"
-        first_merge = commit(repo, merge_subject, "Pull fixes including Original change.")
-        other_merge = commit(repo, merge_subject, "A later, unrelated pull.")
+        alias_subject = "A change related to the original"
+        first_copy = commit(repo, alias_subject, "This includes Original change.")
+        other_copy = commit(repo, alias_subject, "Another copy of the change.")
         unrelated = commit(
             repo,
             "Unrelated change",
-            f"A build happened to use kernel g{other_merge[:12]}.",
+            f"A build happened to use kernel g{other_copy[:12]}.",
         )
         commit_range = f"{base}..HEAD"
 
@@ -443,8 +445,53 @@ def test_recursive_alias_mentions_report_the_matching_hash():
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
             "Original change",
+            f"  Mentioned-by: {first_copy[:12]} {alias_subject} (as title)",
+            f"    Mentioned-by: {unrelated[:12]} Unrelated change (as {other_copy[:12]})",
+        ]
+
+
+@pytest.mark.parametrize(
+    "merge_subject",
+    [
+        "Merge branch 'topic'",
+        "Merge branches 'first' and 'second'",
+        "Merge tag 'fixes' of git://example.com/subsystem",
+        "Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net",
+    ],
+)
+@pytest.mark.parametrize("preloaded_sources", [False, True])
+def test_merge_titles_do_not_create_equivalent_identities(merge_subject, preloaded_sources):
+    with repository() as repo:
+        base = commit(repo, "Base")
+        original = commit(repo, "Original change")
+        first_merge = commit(repo, merge_subject, "Pull fixes including Original change.")
+        other_merge = commit(repo, merge_subject, "A later, unrelated pull.")
+        commit(repo, "Unrelated fix", f"Fixes: {other_merge[:12]}")
+        commit(repo, "Unrelated mention", f"References {other_merge[:12]}.")
+        direct_fix = commit(repo, "Fix the first merge", f"Fixes: {first_merge[:12]}")
+        direct_mention = commit(repo, "Discuss the first merge", f"References {first_merge[:12]}.")
+        commit_range = f"{base}..HEAD"
+        source_range = commit_range if preloaded_sources else f"{base}..{direct_mention}"
+
+        result = run_script(
+            repo,
+            f"{original} Original change\n{first_merge} {merge_subject}\n",
+            [source_range],
+            commit_range,
+        )
+
+        assert result.returncode == 0
+        assert result.stderr == ""
+        assert result.stdout.splitlines() == [
+            "Original change",
             f"  Mentioned-by: {first_merge[:12]} {merge_subject} (as title)",
-            f"    Mentioned-by: {unrelated[:12]} Unrelated change (as {other_merge[:12]})",
+            f"    Fixed-by: {direct_fix[:12]} Fix the first merge",
+            f"    Mentioned-by: {direct_mention[:12]} Discuss the first merge "
+            f"(as {first_merge[:12]})",
+            merge_subject,
+            f"  Fixed-by: {direct_fix[:12]} Fix the first merge",
+            f"  Mentioned-by: {direct_mention[:12]} Discuss the first merge "
+            f"(as {first_merge[:12]})",
         ]
 
 

@@ -163,8 +163,10 @@ def load_sources(source_ranges, preloaded_range=None, preloaded_commits=()):
     """
     Load possible upstream and cherry-picked identities from source_ranges.
 
-    Commits with the same exact subject are treated as identities of the same
-    change.  Ranges are loaded separately because passing multiple A..B
+    Non-merge subjects identify upstream and cherry-picked copies of a change.
+    Generic merge subjects are excluded from title matching, but their hashes
+    remain available for resolving explicit references.
+    Ranges are loaded separately because passing multiple A..B
     expressions to one git log command has different revision-set semantics.
     """
     by_subject = defaultdict(list)
@@ -186,6 +188,10 @@ def load_sources(source_ranges, preloaded_range=None, preloaded_commits=()):
 
             seen.add(commit_hash)
             subjects_by_hash[commit_hash] = subject
+
+            if MERGE_SUBJECT_RE.match(subject):
+                continue
+
             by_subject[subject].append(
                 {
                     "hash": commit_hash,
@@ -491,10 +497,11 @@ def find_mentions(
     """Find later commits which mention a target title or hash identity."""
     results = []
     normalized_subject = normalize_whitespace(subject)
+    search_title = not MERGE_SUBJECT_RE.match(subject)
     subject_tokens = set(TITLE_TOKEN_RE.findall(normalized_subject))
     candidate_positions = set()
 
-    if subject_tokens:
+    if search_title and subject_tokens:
         postings = [mention_index["title_tokens"].get(token, ()) for token in subject_tokens]
 
         if all(postings):
@@ -505,7 +512,7 @@ def find_mentions(
                 title_positions.intersection_update(other_postings)
 
             candidate_positions.update(title_positions)
-    else:
+    elif search_title:
         candidate_positions.update(range(len(commits)))
 
     for alias in hash_aliases:
@@ -527,7 +534,7 @@ def find_mentions(
         if commit_hash in target_hashes or commit_hash in excluded_hashes:
             continue
 
-        mentions_title = normalized_subject in commit["normalized_body"]
+        mentions_title = search_title and normalized_subject in commit["normalized_body"]
         matching_references = {
             reference
             for reference in commit["hash_references"]
