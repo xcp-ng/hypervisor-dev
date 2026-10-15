@@ -89,11 +89,12 @@ as follow-up results. `--target-range` only selects the input commits and leaves
 these search ranges unchanged. An input hash that Git can resolve is also
 considered even when it falls outside the source ranges.
 
-Output groups relationships beneath the input subject, with two spaces per
-recursion level. For example:
+Output groups relationships beneath the input commit's hash and subject, with
+two spaces per recursion level. Hashes are abbreviated to twelve characters;
+if the input hash cannot be resolved, its supplied prefix is used. For example:
 
 ```text
-Original change
+0123456789ab Original change
   Fixed-by: aaaaaaaaaaaa Fix original change
     Mentioned-by: bbbbbbbbbbbb Discuss the fix (as aaaaaaaaaaaa)
       Fixed-by: cccccccccccc Fix the follow-up
@@ -117,9 +118,10 @@ Subtrees consisting solely of mentions by commits with generic merge subjects
 are omitted.
 
 Inputs with no relationships are omitted. If neither a matching source subject
-nor a resolvable input hash is found, the output includes the input subject and
-an indented `Error:` line. Progress and warnings go to stderr, leaving stdout
-available for files and pipelines; `--quiet` suppresses progress only.
+nor a resolvable input hash is found, the output includes the input hash and
+subject and an indented `Error:` line. Progress and warnings go to stderr,
+leaving stdout available for files and pipelines; `--quiet` suppresses progress
+only.
 
 ## Checking applied fixes
 
