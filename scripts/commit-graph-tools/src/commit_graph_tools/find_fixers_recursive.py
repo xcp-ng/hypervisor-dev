@@ -32,7 +32,7 @@ BACKPORT_HASH_RES = (
     ),
 )
 TITLE_TOKEN_RE = re.compile(r"\w+")
-MERGE_SUBJECT_RE = re.compile(r"^Merge (?:branch(es)?|tags?)\b")
+MERGE_SUBJECT_RE = re.compile(r"^Merge (?:branch(es)?|tags?|git)\b")
 
 
 class ProgressReporter:
