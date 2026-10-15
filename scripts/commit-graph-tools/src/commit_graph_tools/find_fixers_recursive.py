@@ -691,10 +691,16 @@ def main():
         )
     )
 
-    parser.add_argument(
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument(
         "file",
         nargs="?",
         help="input file; omit or use - for stdin",
+    )
+    input_group.add_argument(
+        "--target-range",
+        metavar="RANGE",
+        help="read input commits from this revision range, oldest first, instead of a file/stdin",
     )
 
     parser.add_argument(
@@ -741,7 +747,15 @@ def main():
     progress = ProgressReporter(enabled=not args.quiet)
 
     progress.step(1, 6, "Read input commits")
-    if args.file and args.file != "-":
+    if args.target_range is not None:
+        try:
+            data = git_output(
+                "log", "--reverse", "--format=%H %s", "--end-of-options", args.target_range, "--"
+            )
+        except subprocess.CalledProcessError:
+            parser.error(f"cannot read input revision range: {args.target_range}")
+        input_commits = parse_input(data.splitlines())
+    elif args.file and args.file != "-":
         with open(args.file, encoding="utf-8") as f:
             input_commits = parse_input(f)
     else:

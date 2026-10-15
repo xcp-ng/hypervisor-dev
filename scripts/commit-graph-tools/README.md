@@ -17,10 +17,9 @@ with both commands installed and available on `PATH`. The defaults target a
 Linux kernel repository with the `v4.19.19` tag and a `master` branch:
 
 ```sh
-git log --reverse --format='%h %s' \
+find-fixers-recursive --target-range \
   xcpng/kernel/xcpng-4.19.19-8.0.46.10/patched..xcpng/kernel/xcpng-4.19.19-8.0.46.10/patched-cves-nebusec \
-  > commits.txt
-find-fixers-recursive commits.txt > fixes.txt
+  > fixes.txt
 find-applied-fixes-recursive --missing fixes.txt > missing.txt
 ```
 
@@ -29,12 +28,11 @@ contains related commits whose subjects are absent from `v4.19.19..HEAD`.
 Drop `--missing` to show those already present; add `--show-local-hash` to display
 the matching local hashes.
 
-The commands also accept stdin, so the same workflow can be piped:
+The same workflow can be piped directly:
 
 ```sh
-git log --reverse --format='%h %s' \
+find-fixers-recursive --target-range \
   xcpng/kernel/xcpng-4.19.19-8.0.46.10/patched..xcpng/kernel/xcpng-4.19.19-8.0.46.10/patched-cves-nebusec \
-  | find-fixers-recursive \
   | find-applied-fixes-recursive --missing
 ```
 
@@ -42,8 +40,7 @@ For other repositories or branch layouts, set the ranges explicitly. For
 example, given a shared `base` tag, an `upstream` branch and a `downstream` branch:
 
 ```sh
-git -C /path/to/repo log --reverse --format='%h %s' base..downstream \
-  | find-fixers-recursive -C /path/to/repo \
+find-fixers-recursive -C /path/to/repo --target-range base..downstream \
       --source-range base..upstream \
       --source-range base..downstream \
       --fix-range base..upstream \
@@ -59,25 +56,38 @@ both when piping commands outside that repository.
 ## Finding related commits
 
 ```text
-find-fixers-recursive [OPTIONS] [FILE]
+find-fixers-recursive [OPTIONS] [FILE | --target-range RANGE]
 ```
 
-Input must contain one commit per line: a 7–40 character hexadecimal hash,
-whitespace, then the commit subject. Generate it with
-`git log --format='%h %s'`; the default `git log` format is unsuitable. Blank
-lines and lines starting with `#` are ignored. Omit `FILE` or use `-` for stdin.
+By default, input is read from `FILE`, or from stdin when `FILE` is omitted or
+`-`. Each line must contain a 7–40 character hexadecimal hash, whitespace, then
+the commit subject. Generate it with `git log --format='%h %s'`; the default
+`git log` format is unsuitable. Blank lines and lines starting with `#` are
+ignored. Existing file and pipeline workflows continue to work:
+
+```sh
+find-fixers-recursive commits.txt > fixes.txt
+git log --reverse --format='%h %s' base..downstream | find-fixers-recursive
+```
+
+Pass `--target-range RANGE` to load the input commits directly from the selected
+repository, in `git log --reverse` order (oldest first). In this mode stdin is
+ignored, and `FILE` (including `-`) cannot be supplied. An empty range produces
+no input commits; an invalid range is reported as an error with exit status 2.
 
 | Option | Purpose | Default |
 | --- | --- | --- |
 | `-C PATH`, `--repo PATH` | Repository to inspect | Current directory |
+| `--target-range RANGE` | Read input commits directly from a Git revision range, oldest first | Read file or stdin |
 | `--source-range RANGE` | Identify upstream and cherry-picked copies by exact subject; repeat for multiple ranges | `v4.19.19..master` and `v4.19.19..HEAD` |
 | `--fix-range RANGE` | Search this range for fixes and mentions | `v4.19.19..master` |
 | `--quiet` | Suppress progress on stderr | Progress enabled |
 
 Supplying any `--source-range` replaces the default source ranges. Source ranges
 identify copies of a change; `--fix-range` determines which commits can appear
-as follow-up results. An input hash that Git can resolve is also considered even
-when it falls outside the source ranges.
+as follow-up results. `--target-range` only selects the input commits and leaves
+these search ranges unchanged. An input hash that Git can resolve is also
+considered even when it falls outside the source ranges.
 
 Output groups relationships beneath the input subject, with two spaces per
 recursion level. For example:

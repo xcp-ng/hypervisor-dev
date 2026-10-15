@@ -65,6 +65,122 @@ def run_script(repo, input_text, source_ranges, fix_range, *, quiet=True):
     return run(command, cwd=Path(__file__).parent, input_text=input_text, check=False)
 
 
+@pytest.mark.parametrize("input_mode", ["stdin", "explicit-stdin", "file", "target-range"])
+def test_input_modes_select_the_same_commits_in_order(input_mode):
+    with repository() as repo:
+        base = commit(repo, "Excluded base")
+        first = commit(repo, "First original")
+        second = commit(repo, "Second original")
+        git(repo, "branch", "inputs")
+        first_fix = commit(repo, "First correction", f"Fixes: {first[:12]}")
+        second_fix = commit(repo, "Second correction", f"Fixes: {second[:12]}")
+        commit(repo, "Excluded base correction", f"Fixes: {base[:12]}")
+        head = git(repo, "rev-parse", "HEAD")
+        input_text = f"{first} First original\n{second} Second original\n"
+        command = [
+            sys.executable,
+            "-m",
+            MODULE,
+            "--repo",
+            repo,
+            "--quiet",
+            "--source-range",
+            f"{base}..HEAD",
+            "--fix-range",
+            f"{base}..HEAD",
+        ]
+
+        if input_mode == "target-range":
+            command.extend(["--target-range", f"{base}..inputs"])
+            # Range mode must ignore stdin, even when it contains valid input.
+            input_text = f"{base} Excluded base\n"
+        elif input_mode == "file":
+            input_file = repo / "commits.txt"
+            input_file.write_text(input_text, encoding="utf-8")
+            command.append(str(input_file))
+            input_text = f"{base} Excluded base\n"
+        elif input_mode == "explicit-stdin":
+            command.append("-")
+
+        result = run(command, cwd=Path(__file__).parent, input_text=input_text, check=False)
+
+        assert result.returncode == 0
+        assert result.stderr == ""
+        assert result.stdout.splitlines() == [
+            "First original",
+            f"  Fixed-by: {first_fix[:12]} First correction",
+            "Second original",
+            f"  Fixed-by: {second_fix[:12]} Second correction",
+        ]
+        assert git(repo, "rev-parse", "HEAD") == head
+
+
+@pytest.mark.parametrize("input_file", ["commits.txt", "-"])
+def test_target_range_cannot_be_combined_with_file_input(input_file):
+    result = run(
+        [sys.executable, "-m", MODULE, "--target-range", "base..HEAD", input_file],
+        input_text="",
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "not allowed with argument" in result.stderr
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize("input_range", ["does-not-exist..HEAD", "--all", ""])
+def test_invalid_target_range_has_a_clear_error(input_range):
+    with repository() as repo:
+        commit(repo, "Base")
+        result = run(
+            [
+                sys.executable,
+                "-m",
+                MODULE,
+                "--repo",
+                repo,
+                "--quiet",
+                f"--target-range={input_range}",
+            ],
+            input_text="",
+            check=False,
+        )
+
+        assert result.returncode == 2
+        assert f"cannot read input revision range: {input_range}" in result.stderr
+        assert "Traceback" not in result.stderr
+        assert result.stdout == ""
+
+
+def test_empty_target_range_does_not_fall_back_to_stdin():
+    with repository() as repo:
+        base = commit(repo, "Base")
+        original = commit(repo, "Original change")
+        commit(repo, "Correction", f"Fixes: {original[:12]}")
+        result = run(
+            [
+                sys.executable,
+                "-m",
+                MODULE,
+                "--repo",
+                repo,
+                "--quiet",
+                "--target-range",
+                "HEAD..HEAD",
+                "--source-range",
+                f"{base}..HEAD",
+                "--fix-range",
+                f"{base}..HEAD",
+            ],
+            input_text=f"{original} Original change\n",
+            check=False,
+        )
+
+        assert result.returncode == 0
+        assert result.stdout == ""
+        assert result.stderr == ""
+
+
 def test_fixes_and_mentions_are_both_recursive():
     with repository() as repo:
         base = commit(repo, "Base")
