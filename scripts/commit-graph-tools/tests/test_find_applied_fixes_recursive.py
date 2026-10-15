@@ -4,6 +4,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from commit_graph_tools import find_applied_fixes_recursive
 
 MODULE = "commit_graph_tools.find_applied_fixes_recursive"
@@ -106,6 +108,45 @@ def test_present_and_missing_output_preserves_relationships_and_depth():
             "    Mentioned-by: bbbbbbbbbbbb Missing mention (as abcdef012345)",
         ]
         assert missing.stderr.strip() == ("1/3 related commits are not present in v4.19.19..HEAD")
+
+
+@pytest.mark.parametrize("repo_option", ["-C", "--repo"])
+def test_tree_range_checks_another_branch_without_changing_head(repo_option):
+    with tempfile.TemporaryDirectory(prefix="find-applied-fixes-test-") as directory:
+        repo = Path(directory) / "repo"
+        repo.mkdir()
+        git(repo, "init", "--quiet")
+        git(repo, "config", "user.name", "Test User")
+        git(repo, "config", "user.email", "test@example.com")
+        base = commit(repo, "Excluded base fix")
+        git(repo, "tag", "base")
+        git(repo, "switch", "--quiet", "--create", "target")
+        target_fix = commit(repo, "Target fix")
+        git(repo, "switch", "--quiet", "--detach", base)
+        head = commit(repo, "HEAD-only fix")
+        input_text = (
+            "Original change\n"
+            "  Fixed-by: aaaaaaaaaaaa Target fix\n"
+            "  Fixed-by: bbbbbbbbbbbb HEAD-only fix\n"
+            "  Fixed-by: cccccccccccc Excluded base fix\n"
+        )
+        command = [sys.executable, "-m", MODULE, repo_option, repo, "--tree-range", "base..target"]
+
+        present = run([*command, "--show-local-hash"], input_text=input_text)
+        missing = run([*command, "--missing"], input_text=input_text)
+
+        assert present.stdout.splitlines() == [
+            "Original change",
+            f"  Fixed-by: aaaaaaaaaaaa Target fix    [local: {target_fix[:12]}]",
+        ]
+        assert present.stderr.strip() == ("1/3 related commits are already present in base..target")
+        assert missing.stdout.splitlines() == [
+            "Original change",
+            "  Fixed-by: bbbbbbbbbbbb HEAD-only fix",
+            "  Fixed-by: cccccccccccc Excluded base fix",
+        ]
+        assert missing.stderr.strip() == ("2/3 related commits are not present in base..target")
+        assert git(repo, "rev-parse", "HEAD") == head
 
 
 def test_invalid_repo_has_a_clear_error():

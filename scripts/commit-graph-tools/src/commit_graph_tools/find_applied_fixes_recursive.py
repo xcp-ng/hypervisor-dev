@@ -15,16 +15,16 @@ def git(*args):
     )
 
 
-def load_tree_subjects():
+def load_tree_subjects(tree_range):
     """
     Return:
         subject -> [commit hashes]
 
-    Only commits in TREE_RANGE are considered.
+    Only commits in tree_range are considered.
     """
     data = git(
         "log",
-        TREE_RANGE,
+        tree_range,
         "--format=%H%x1f%s",
     )
 
@@ -168,7 +168,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         description=(
-            f"Find related commits already present in {TREE_RANGE}, "
+            "Find related commits already present in a Git revision range, "
             "preserving recursive relationship chains."
         )
     )
@@ -188,6 +188,13 @@ def main():
     )
 
     parser.add_argument(
+        "--tree-range",
+        default=TREE_RANGE,
+        metavar="RANGE",
+        help=f"range checked for applied commits (default: {TREE_RANGE})",
+    )
+
+    parser.add_argument(
         "--missing",
         action="store_true",
         help="show related commits NOT present instead of those already present",
@@ -196,7 +203,7 @@ def main():
     parser.add_argument(
         "--show-local-hash",
         action="store_true",
-        help="show matching hash from the current tree",
+        help="show matching hash from the selected range",
     )
 
     args = parser.parse_args()
@@ -218,7 +225,7 @@ def main():
     else:
         groups = parse_fixes(sys.stdin)
 
-    tree_subjects = load_tree_subjects()
+    tree_subjects = load_tree_subjects(args.tree_range)
 
     total = 0
     matched = 0
@@ -260,12 +267,12 @@ def main():
 
     if args.missing:
         print(
-            f"\n{total - matched}/{total} related commits are not present in {TREE_RANGE}",
+            f"\n{total - matched}/{total} related commits are not present in {args.tree_range}",
             file=sys.stderr,
         )
     else:
         print(
-            f"\n{matched}/{total} related commits are already present in {TREE_RANGE}",
+            f"\n{matched}/{total} related commits are already present in {args.tree_range}",
             file=sys.stderr,
         )
 
