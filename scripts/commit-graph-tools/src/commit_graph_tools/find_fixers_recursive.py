@@ -849,6 +849,8 @@ def main():
 
     for position, input_commit in enumerate(input_commits, 1):
         subject = input_commit["subject"]
+        input_hash = input_commit["resolved_hash"] or input_commit["hash"]
+        heading = f"{input_hash[:12]} {subject}"
         progress.progress(position, len(input_commits), subject)
         source_hashes = original_identities(
             input_commit,
@@ -856,7 +858,7 @@ def main():
         )
 
         if not source_hashes:
-            print(subject)
+            print(heading)
             print(f"  Error: original commit not found in {', '.join(source_ranges)}")
             continue
 
@@ -874,7 +876,7 @@ def main():
         if not relationships:
             continue
 
-        print(subject)
+        print(heading)
 
         for depth, relationship, commit, matched_as in relationships:
             indent = "  " * depth

@@ -61,7 +61,8 @@ def test_parser_accepts_relationship_labels_errors_and_legacy_lines():
     ]
 
 
-def test_present_and_missing_output_preserves_relationships_and_depth():
+@pytest.mark.parametrize("source_header", ["Original change", "0123456789ab Original change"])
+def test_present_and_missing_output_preserves_relationships_and_depth(source_header):
     with tempfile.TemporaryDirectory(prefix="find-applied-fixes-test-") as directory:
         repo = Path(directory) / "repo"
         repo.mkdir()
@@ -73,7 +74,7 @@ def test_present_and_missing_output_preserves_relationships_and_depth():
         local_fix = commit(repo, "Present fix")
         local_mention = commit(repo, "Present mention")
         input_text = (
-            "Original change\n"
+            f"{source_header}\n"
             "  Fixed-by: aaaaaaaaaaaa Present fix\n"
             "    Mentioned-by: bbbbbbbbbbbb Missing mention (as abcdef012345)\n"
             "  Mentioned-by: cccccccccccc Present mention (as title)\n"
@@ -93,7 +94,7 @@ def test_present_and_missing_output_preserves_relationships_and_depth():
 
         assert present.returncode == 0
         assert present.stdout.splitlines() == [
-            "Original change",
+            source_header,
             f"  Fixed-by: aaaaaaaaaaaa Present fix    [local: {local_fix[:12]}]",
             "  Mentioned-by: cccccccccccc Present mention (as title)    "
             f"[local: {local_mention[:12]}]",
@@ -104,7 +105,7 @@ def test_present_and_missing_output_preserves_relationships_and_depth():
 
         assert missing.returncode == 0
         assert missing.stdout.splitlines() == [
-            "Original change",
+            source_header,
             "    Mentioned-by: bbbbbbbbbbbb Missing mention (as abcdef012345)",
         ]
         assert missing.stderr.strip() == ("1/3 related commits are not present in v4.19.19..HEAD")

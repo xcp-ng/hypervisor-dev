@@ -76,7 +76,7 @@ def test_input_modes_select_the_same_commits_in_order(input_mode):
         second_fix = commit(repo, "Second correction", f"Fixes: {second[:12]}")
         commit(repo, "Excluded base correction", f"Fixes: {base[:12]}")
         head = git(repo, "rev-parse", "HEAD")
-        input_text = f"{first} First original\n{second} Second original\n"
+        input_text = f"{first[:7]} First original\n{second[:7]} Second original\n"
         command = [
             sys.executable,
             "-m",
@@ -107,9 +107,9 @@ def test_input_modes_select_the_same_commits_in_order(input_mode):
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "First original",
+            f"{first[:12]} First original",
             f"  Fixed-by: {first_fix[:12]} First correction",
-            "Second original",
+            f"{second[:12]} Second original",
             f"  Fixed-by: {second_fix[:12]} Second correction",
         ]
         assert git(repo, "rev-parse", "HEAD") == head
@@ -233,7 +233,7 @@ def test_fixes_and_mentions_are_both_recursive():
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "Original change with spacing",
+            f"{local[:12]} Original change with spacing",
             f"  Fixed-by: {direct_fix[:12]} Direct correction",
             f"    Fixed-by: {fix_of_fix[:12]} Correction follow-up",
             f"    Mentioned-by: {mention_of_fix[:12]} Discussion of correction (as title)",
@@ -274,7 +274,7 @@ def test_mentions_match_upstream_and_cherry_picked_hashes():
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "Original identity",
+            f"{local[:12]} Original identity",
             f"  Mentioned-by: {local_reference[:12]} Cherry-pick hash reference (as {local[:12]})",
             f"  Mentioned-by: {upstream_reference[:12]} Upstream hash reference "
             f"(as {upstream[:12]})",
@@ -313,7 +313,7 @@ def test_backport_markers_add_original_hashes_to_mention_search():
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "Backported change",
+            f"{backport[:12]} Backported change",
             f"  Mentioned-by: {cherry_pick_reference[:12]} Reference cherry-pick "
             f"identity (as {cherry_pick_hash[:12]})",
             f"  Mentioned-by: {upstream_reference[:12]} Reference upstream "
@@ -353,7 +353,7 @@ def test_fixes_tag_can_point_to_a_commit_on_another_branch():
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "Upstream-only change",
+            f"{upstream[:12]} Upstream-only change",
             f"  Fixed-by: {fixer[:12]} Cross-branch fix",
         ]
 
@@ -382,7 +382,7 @@ def test_hash_mention_can_point_to_a_commit_on_another_branch():
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "Upstream-only change",
+            f"{upstream[:12]} Upstream-only change",
             f"  Mentioned-by: {mention[:12]} Cross-branch reference (as {upstream[:7]})",
         ]
 
@@ -411,7 +411,7 @@ def test_title_only_match_can_point_to_another_branch():
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "Repeated title",
+            f"{upstream[:12]} Repeated title",
             f"  Mentioned-by: {mention[:12]} Coincidental discussion (as title)",
         ]
 
@@ -444,7 +444,7 @@ def test_fix_range_limits_the_commits_that_are_searched():
         assert excluded.stdout == ""
         assert included.returncode == 0
         assert included.stdout.splitlines() == [
-            "Original change",
+            f"{original[:12]} Original change",
             f"  Fixed-by: {fixer[:12]} Fix original change",
         ]
 
@@ -471,7 +471,7 @@ def test_errors_are_reported_without_out_of_range_fixes_spew():
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "Missing original",
+            "ffffffffffff Missing original",
             f"  Error: original commit not found in {commit_range}",
         ]
 
@@ -530,7 +530,7 @@ def test_merge_mention_is_retained_when_it_leads_to_a_real_relationship():
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "Original change",
+            f"{original[:12]} Original change",
             f"  Mentioned-by: {merge[:12]} Merge branch 'topic' (as title)",
             f"    Fixed-by: {fixer[:12]} Fix merged work",
         ]
@@ -560,7 +560,7 @@ def test_recursive_alias_mentions_report_the_matching_hash():
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "Original change",
+            f"{original[:12]} Original change",
             f"  Mentioned-by: {first_copy[:12]} {alias_subject} (as title)",
             f"    Mentioned-by: {unrelated[:12]} Unrelated change (as {other_copy[:12]})",
         ]
@@ -599,12 +599,12 @@ def test_merge_titles_do_not_create_equivalent_identities(merge_subject, preload
         assert result.returncode == 0
         assert result.stderr == ""
         assert result.stdout.splitlines() == [
-            "Original change",
+            f"{original[:12]} Original change",
             f"  Mentioned-by: {first_merge[:12]} {merge_subject} (as title)",
             f"    Fixed-by: {direct_fix[:12]} Fix the first merge",
             f"    Mentioned-by: {direct_mention[:12]} Discuss the first merge "
             f"(as {first_merge[:12]})",
-            merge_subject,
+            f"{first_merge[:12]} {merge_subject}",
             f"  Fixed-by: {direct_fix[:12]} Fix the first merge",
             f"  Mentioned-by: {direct_mention[:12]} Discuss the first merge "
             f"(as {first_merge[:12]})",
