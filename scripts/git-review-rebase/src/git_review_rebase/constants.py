@@ -37,6 +37,7 @@ class CommitMatchInfoFlag(Flag):
     UpstreamNotFound = auto()
     NoCherryPickReference = auto()
     OutOfOrder = auto()
+    MissingFixes = auto()
 
 
 REBASE_FLAGS = [
@@ -54,6 +55,7 @@ BACKPORT_FLAGS = [
     CommitMatchInfoFlag.UpstreamNotFound,
     CommitMatchInfoFlag.NoCherryPickReference,
     CommitMatchInfoFlag.OutOfOrder,
+    CommitMatchInfoFlag.MissingFixes,
 ]
 
 
@@ -118,6 +120,11 @@ commit_match_info_repr = {
         CommitMatchInfoFlag.OutOfOrder,
         Text("⇅", SolarizedColors.Magenta),
         "Backport applied in a different order than upstream, touching the same functions",
+    ),
+    CommitMatchInfoFlag.MissingFixes: CommitMatchInfo(
+        CommitMatchInfoFlag.MissingFixes,
+        Text("!", SolarizedColors.Orange),
+        "Upstream commit has fixes which were not backported",
     ),
 }
 

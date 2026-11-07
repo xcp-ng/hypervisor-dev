@@ -1,6 +1,7 @@
 """Commit matching logic for reviewing backports against their upstream commits."""
 
 import argparse
+import os
 from collections import OrderedDict
 from itertools import combinations
 
@@ -8,7 +9,17 @@ import pygit2
 
 from .commit_matching import RebasedCommitMatch
 from .constants import CacheFlags, CommitMatchInfoFlag
-from .git_utils import cherry_pick_parents, commit_touches_paths, oid, patchid, range_log
+from .git_utils import (
+    cherry_pick_parents,
+    cherry_pick_references,
+    commit_title,
+    commit_touches_paths,
+    git_log_messages,
+    oid,
+    patchid,
+    range_log,
+)
+from .upstream_fixes import TITLE_LENGTH, MissingFix, UpstreamFixes
 
 
 def upstream_commit(repo: pygit2.Repository, commit: pygit2.Commit) -> None | pygit2.Commit:
@@ -86,8 +97,14 @@ class BackportMatches:
         # Backports applied in a different order than upstream and touching the same functions,
         # by backport commit id. Symmetric, even though only modified backports are flagged.
         self.out_of_order: dict[pygit2.Oid, set[pygit2.Oid]] = {}
-        self.init_matches(oid(repo, start_range), oid(repo, end_range))
+        # Upstream fixes of the cherry-picked commits, and fixes of those fixes, which were not
+        # backported, by backport commit id. Each fix is followed by its own fixes.
+        self.missing_fixes: dict[pygit2.Oid, list[MissingFix]] = {}
+        end = oid(repo, end_range)
+        self.init_matches(oid(repo, start_range), end)
         self.init_out_of_order()
+        if args.upstream is not None:
+            self.init_missing_fixes(end, oid(repo, args.upstream + "^{commit}"))
 
     def init_matches(self, start: pygit2.Oid, end: pygit2.Oid) -> None:
         for backport in range_log(self.repo, start, end):
@@ -156,3 +173,61 @@ class BackportMatches:
             for match in (first, second):
                 if CommitMatchInfoFlag.ModifiedBackport in match.match_info:
                     match.match_info |= CommitMatchInfoFlag.OutOfOrder
+
+    def init_missing_fixes(self, end: pygit2.Oid, upstream: pygit2.Oid) -> None:
+        backported = [m for m in self.commit_matches.values() if m.left_commit is not None]
+        if not backported:
+            return
+
+        # Without paths given, only look at the directories touched by the cherry-picked commits,
+        # which makes the git log much faster and leaves out unrelated fixes.
+        paths = self.args.paths
+        if not paths:
+            touched_paths = set()
+            for match in backported:
+                assert match.left_commit is not None
+                for path in changed_blobs(match.left_commit):
+                    touched_paths.add(os.path.dirname(path) or path)
+            paths = sorted(touched_paths)
+
+        # Fixes reachable from the end of the range are already there, e.g. when downstream is
+        # based on a more recent upstream.
+        fixes = UpstreamFixes(self.repo, [f"{end}..{upstream}"], paths)
+
+        # Fixes backported downstream, whether in the reviewed range or before it, are referenced
+        # by sha1, or at least share the same title as upstream.
+        backported_sha1s: set[str] = set()
+        backported_titles: set[str] = set()
+        for _, message in git_log_messages(self.repo, [str(end), f"^{upstream}"], paths):
+            backported_sha1s.update(cherry_pick_references(message))
+            backported_titles.add(message.partition("\n")[0][:TITLE_LENGTH])
+
+        def is_backported(fix: pygit2.Commit) -> bool:
+            return (
+                str(fix.id) in backported_sha1s
+                or commit_title(fix)[:TITLE_LENGTH] in backported_titles
+            )
+
+        # Fixes backported in the reviewed range list their own missing fixes on their row.
+        reviewed = {m.left_commit.id for m in backported if m.left_commit is not None}
+
+        def missing_fixes_of(
+            commit: pygit2.Commit, depth: int, seen: set[pygit2.Oid]
+        ) -> list[MissingFix]:
+            # Fixes of backported fixes are followed too, as they may be missing.
+            missing = []
+            for fix in fixes.fixes_of(commit):
+                if fix.id in seen or fix.id in reviewed:
+                    continue
+                seen.add(fix.id)
+                if not is_backported(fix):
+                    missing.append(MissingFix(fix, commit, depth))
+                missing += missing_fixes_of(fix, depth + 1, seen)
+            return missing
+
+        for match in backported:
+            assert match.left_commit is not None and match.right_commit is not None
+            missing = missing_fixes_of(match.left_commit, 0, {match.left_commit.id})
+            if missing:
+                self.missing_fixes[match.right_commit.id] = missing
+                match.match_info |= CommitMatchInfoFlag.MissingFixes
