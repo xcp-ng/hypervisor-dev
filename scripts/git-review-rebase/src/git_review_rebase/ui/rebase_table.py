@@ -14,6 +14,7 @@ from ..backport_matching import BackportMatches
 from ..commit_matching import RebasedCommitsMatches
 from ..constants import CommitMatchInfoFlag, FilterType, SolarizedColors, commit_match_info_repr
 from ..git_utils import cherry_pick_parents
+from ..upstream_fixes import MissingFix
 from .cherry_pick_screen import CherryPickScreen
 from .missing_fixes_screen import MissingFixesScreen
 from .search_bar import SearchBar
@@ -155,7 +156,7 @@ class RebaseTable(DataTable):
     def action_show_missing_fixes(self) -> None:
         assert self.rebased_commit_matches is not None
         assert isinstance(self.row_key.value, pygit2.Oid)
-        missing_fixes: list[pygit2.Commit] = []
+        missing_fixes: list[MissingFix] = []
         if isinstance(self.rebased_commit_matches, BackportMatches):
             missing_fixes = self.rebased_commit_matches.missing_fixes.get(self.row_key.value, [])
         if not missing_fixes:

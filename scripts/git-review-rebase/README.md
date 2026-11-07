@@ -99,7 +99,9 @@ the same subsystems, and is much faster with changed-path Bloom filters:
 git commit-graph write --reachable --changed-paths
 ```
 
-Fixes of fixes are not searched.
+Fixes of fixes are searched recursively, including the fixes of backported fixes, and listed
+indented under the commit they fix. The fixes of a commit backported in the reviewed range are
+only listed on its own row.
 
 ## Development
 
