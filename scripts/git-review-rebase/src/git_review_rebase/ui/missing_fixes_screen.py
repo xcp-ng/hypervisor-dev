@@ -1,4 +1,4 @@
-"""Screen listing the upstream fixes of a commit which were not backported."""
+"""Screen listing the upstream fixes of a commit, and their own fixes, which were not backported."""
 
 from datetime import datetime
 
@@ -10,13 +10,26 @@ from textual.screen import ModalScreen
 from textual.widgets import DataTable, Label
 
 from ..constants import SolarizedColors
+from ..git_utils import abbrev
+from ..upstream_fixes import MissingFix
 from .utils import cell, cell_from_commit
 
 
-def _fix_cell(fix: pygit2.Commit) -> Text:
+def _date_cell(fix: MissingFix) -> Text:
+    return Text(
+        datetime.fromtimestamp(fix.commit.commit_time).strftime("%Y-%m-%d"), SolarizedColors.Base01
+    )
+
+
+def _fixed_commit_cell(fix: MissingFix) -> Text:
+    # Shown even for nested fixes, as the fixed commit is not listed when it was backported.
+    return Text(abbrev(fix.fixed_commit.id), SolarizedColors.Yellow)
+
+
+def _fix_cell(fix: MissingFix) -> Text:
     # No name-rev here, as it takes seconds per commit on large repositories.
-    date = datetime.fromtimestamp(fix.commit_time).strftime("%Y-%m-%d")
-    return cell(Text(date + " ", SolarizedColors.Base01) + cell_from_commit(fix))
+    indent = Text("  " * (fix.depth - 1) + "↳ ", SolarizedColors.Base01) if fix.depth else Text("")
+    return cell(indent + cell_from_commit(fix.commit))
 
 
 class MissingFixesScreen(ModalScreen):
@@ -45,7 +58,7 @@ class MissingFixesScreen(ModalScreen):
     def __init__(
         self,
         upstream_commit: pygit2.Commit,
-        missing_fixes: list[pygit2.Commit],
+        missing_fixes: list[MissingFix],
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -63,16 +76,19 @@ class MissingFixesScreen(ModalScreen):
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
         table.cursor_type = "row"
-        table.show_header = False
-        table.add_column("fix")
+        table.add_column("Date")
+        table.add_column("Fixes")
+        table.add_column("Missing fix")
         for fix in self.missing_fixes:
-            table.add_row(_fix_cell(fix), key=str(fix.id))
+            table.add_row(
+                _date_cell(fix), _fixed_commit_cell(fix), _fix_cell(fix), key=str(fix.commit.id)
+            )
         table.focus()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         for fix in self.missing_fixes:
-            if str(fix.id) == event.row_key.value:
-                self.dismiss(fix)
+            if str(fix.commit.id) == event.row_key.value:
+                self.dismiss(fix.commit)
                 return
         self.dismiss(None)
 

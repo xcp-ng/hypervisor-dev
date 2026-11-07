@@ -19,7 +19,7 @@ from .git_utils import (
     patchid,
     range_log,
 )
-from .upstream_fixes import TITLE_LENGTH, UpstreamFixes
+from .upstream_fixes import TITLE_LENGTH, MissingFix, UpstreamFixes
 
 
 def upstream_commit(repo: pygit2.Repository, commit: pygit2.Commit) -> None | pygit2.Commit:
@@ -97,9 +97,9 @@ class BackportMatches:
         # Backports applied in a different order than upstream and touching the same functions,
         # by backport commit id. Symmetric, even though only modified backports are flagged.
         self.out_of_order: dict[pygit2.Oid, set[pygit2.Oid]] = {}
-        # Upstream fixes of the cherry-picked commits which were not backported, oldest first, by
-        # backport commit id.
-        self.missing_fixes: dict[pygit2.Oid, list[pygit2.Commit]] = {}
+        # Upstream fixes of the cherry-picked commits, and fixes of those fixes, which were not
+        # backported, by backport commit id. Each fix is followed by its own fixes.
+        self.missing_fixes: dict[pygit2.Oid, list[MissingFix]] = {}
         end = oid(repo, end_range)
         self.init_matches(oid(repo, start_range), end)
         self.init_out_of_order()
@@ -202,14 +202,32 @@ class BackportMatches:
             backported_sha1s.update(cherry_pick_references(message))
             backported_titles.add(message.partition("\n")[0][:TITLE_LENGTH])
 
+        def is_backported(fix: pygit2.Commit) -> bool:
+            return (
+                str(fix.id) in backported_sha1s
+                or commit_title(fix)[:TITLE_LENGTH] in backported_titles
+            )
+
+        # Fixes backported in the reviewed range list their own missing fixes on their row.
+        reviewed = {m.left_commit.id for m in backported if m.left_commit is not None}
+
+        def missing_fixes_of(
+            commit: pygit2.Commit, depth: int, seen: set[pygit2.Oid]
+        ) -> list[MissingFix]:
+            # Fixes of backported fixes are followed too, as they may be missing.
+            missing = []
+            for fix in fixes.fixes_of(commit):
+                if fix.id in seen or fix.id in reviewed:
+                    continue
+                seen.add(fix.id)
+                if not is_backported(fix):
+                    missing.append(MissingFix(fix, commit, depth))
+                missing += missing_fixes_of(fix, depth + 1, seen)
+            return missing
+
         for match in backported:
             assert match.left_commit is not None and match.right_commit is not None
-            missing = [
-                fix
-                for fix in fixes.fixes_of(match.left_commit)
-                if str(fix.id) not in backported_sha1s
-                and commit_title(fix)[:TITLE_LENGTH] not in backported_titles
-            ]
+            missing = missing_fixes_of(match.left_commit, 0, {match.left_commit.id})
             if missing:
                 self.missing_fixes[match.right_commit.id] = missing
                 match.match_info |= CommitMatchInfoFlag.MissingFixes

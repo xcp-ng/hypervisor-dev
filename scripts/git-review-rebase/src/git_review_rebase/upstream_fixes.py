@@ -9,6 +9,17 @@ MIN_SHA1_PREFIX_LENGTH = 7
 TITLE_LENGTH = 60
 
 
+class MissingFix:
+    """Upstream fix which was not backported, along with the commit it fixes.
+
+    The fixed commit is either the cherry-picked commit (depth 0), or another fix of it."""
+
+    def __init__(self, commit: pygit2.Commit, fixed_commit: pygit2.Commit, depth: int):
+        self.commit = commit
+        self.fixed_commit = fixed_commit
+        self.depth = depth
+
+
 class UpstreamFixes:
     """Upstream commits carrying a Fixes: tag, by referenced sha1 prefix and title.
 
