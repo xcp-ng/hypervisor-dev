@@ -347,6 +347,10 @@ function init_worktrees() {
                 base_version=85e1424de2dda
             fi
         fi
+	if [[ ${PRODUCT} = "kernel" ]]; then
+	    # Linux doesn't create tags of the form vX.Y.0, it's simplified to vX.Y
+	    base_version=${base_version%.0}
+	fi
     else
         base_version=$(git -C "${CODE_REPO_PATH}" rev-parse "origin/source/8.3^{/Initial commit.}")
     fi
