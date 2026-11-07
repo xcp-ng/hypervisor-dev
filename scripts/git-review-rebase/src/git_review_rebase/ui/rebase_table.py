@@ -15,6 +15,7 @@ from ..commit_matching import RebasedCommitsMatches
 from ..constants import CommitMatchInfoFlag, FilterType, SolarizedColors, commit_match_info_repr
 from ..git_utils import cherry_pick_parents
 from .cherry_pick_screen import CherryPickScreen
+from .missing_fixes_screen import MissingFixesScreen
 from .search_bar import SearchBar
 from .utils import cell_from_commit
 
@@ -39,6 +40,7 @@ class RebaseTable(DataTable):
         ("enter", "show_diff", "Show side-by-side diff"),
         ("c", "comment", "Comment commit"),
         ("p", "pick_cherry_pick_source", "Pick cherry-picked commit"),
+        ("x", "show_missing_fixes", "Show missing upstream fixes"),
     ]
 
     def __init__(
@@ -149,6 +151,25 @@ class RebaseTable(DataTable):
 
         if match.right_commit is None or not self._push_cherry_pick_screen(match.right_commit):
             self.notify("No cherry-picked commit found in this commit message")
+
+    def action_show_missing_fixes(self) -> None:
+        assert self.rebased_commit_matches is not None
+        assert isinstance(self.row_key.value, pygit2.Oid)
+        missing_fixes: list[pygit2.Commit] = []
+        if isinstance(self.rebased_commit_matches, BackportMatches):
+            missing_fixes = self.rebased_commit_matches.missing_fixes.get(self.row_key.value, [])
+        if not missing_fixes:
+            self.notify("No missing upstream fix for this commit")
+            return
+
+        match = self.rebased_commit_matches.commit_matches[self.row_key.value]
+        assert match.left_commit is not None
+
+        def handle_selection(fix: None | pygit2.Commit) -> None:
+            if fix is not None:
+                self.post_message(ShowDiff(fix, None))
+
+        self.app.push_screen(MissingFixesScreen(match.left_commit, missing_fixes), handle_selection)
 
     def on_mount(self) -> None:
         self.loading = True

@@ -2,6 +2,7 @@
 
 import multiprocessing
 import re
+import subprocess
 from multiprocessing.managers import DictProxy
 
 import pygit2
@@ -117,12 +118,51 @@ _CHERRY_PICK_PATTERN = re.compile(
 )
 
 
-def cherry_pick_parents(commit: pygit2.Commit) -> list[str]:
-    """Return sha1 strings from cherry-pick references, in commit message order."""
+def cherry_pick_references(message: str) -> list[str]:
+    """Return sha1 strings from cherry-pick references, in message order."""
     return [
         next(sha1 for sha1 in match.groups() if sha1)
-        for match in _CHERRY_PICK_PATTERN.finditer(commit.message)
+        for match in _CHERRY_PICK_PATTERN.finditer(message)
     ]
+
+
+def cherry_pick_parents(commit: pygit2.Commit) -> list[str]:
+    """Return sha1 strings from cherry-pick references, in commit message order."""
+    return cherry_pick_references(commit.message)
+
+
+# Fixes: 123456789abc ("some commit title")
+_FIXES_PATTERN = re.compile(
+    r'^\s*Fixes:\s*([0-9a-f]{7,40})\b(?:\s*\("(.*)"\))?', re.IGNORECASE | re.MULTILINE
+)
+
+
+def fixes_references(message: str) -> list[tuple[str, str]]:
+    """Return the (lowercase sha1 prefix, title) of each Fixes: tag, title being "" if absent."""
+    return [(sha1.lower(), title) for sha1, title in _FIXES_PATTERN.findall(message)]
+
+
+def git_log_messages(
+    repo: pygit2.Repository, revisions: list[str], paths: list[str], grep: None | str = None
+) -> list[tuple[str, str]]:
+    """Return the (sha1, message) of the commits listed by git log, newest first.
+
+    Runs the git command line rather than libgit2, as it is much faster on large histories thanks
+    to the commit-graph and its changed-path Bloom filters. The grep pattern is a case insensitive
+    extended regular expression, matched against each line of the message."""
+    command = ["git", "-C", repo.workdir, "log", "-z", "--format=%H%n%B"]
+    if grep is not None:
+        command += ["-i", "-E", f"--grep={grep}"]
+    command += [*revisions, "--", *paths]
+    output = subprocess.run(
+        command, capture_output=True, text=True, errors="replace", check=True
+    ).stdout
+    commits = []
+    for entry in output.split("\0"):
+        if entry:
+            sha1, _, message = entry.partition("\n")
+            commits.append((sha1, message))
+    return commits
 
 
 def abbrev(oid: pygit2.Oid):

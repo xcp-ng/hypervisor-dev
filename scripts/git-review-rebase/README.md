@@ -72,11 +72,34 @@ message, using any of the `(cherry picked from commit <sha1>)`, `commit <sha1> u
   | `?`  | Cherry-picked commit not found in the repository |
   | `✗`  | No cherry-picked commit in the message           |
   | `⇅`  | Modified backport applied out of upstream order  |
+  | `!`  | Upstream fixes missing from the backports        |
 
 A modified backport gets `⇅` when it was applied in a different order than upstream relative to
 another backport touching the same functions (taken from the diff hunk headers), as reordering
 them may give cleaner backports. Pairs of clean backports are ignored. When such a backport is
 highlighted, the commits it was reordered with are highlighted too.
+
+#### Missing upstream fixes
+
+```bash
+git-review-backports --upstream origin/master <base>..<branch> [PATH...]
+```
+
+With `--upstream`, a backport gets `!` when its upstream commit is referenced by a `Fixes:` tag
+(by sha1 prefix, or by its first 60 title characters) of a commit in `<branch>..<upstream>` which
+was not backported. A fix counts as backported when a commit in `<branch> ^<upstream>` references
+it in a cherry-pick line or has the same title. Pressing `x` lists the missing fixes, and
+selecting one shows its diff.
+
+The fixes are searched in a single `git log` limited to the given paths or, without paths, to the
+directories touched by the upstream commits. It is meant for short lists of backports touching
+the same subsystems, and is much faster with changed-path Bloom filters:
+
+```bash
+git commit-graph write --reachable --changed-paths
+```
+
+Fixes of fixes are not searched.
 
 ## Development
 
