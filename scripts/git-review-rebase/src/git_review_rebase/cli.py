@@ -66,6 +66,13 @@ def parse_backports_args(argv: None | list[str] = None) -> argparse.Namespace:
         description="Interactive tool for reviewing backports against their upstream commits",
     )
     _add_common_args(parser)
+    parser.add_argument(
+        "--upstream",
+        type=str,
+        default=None,
+        help="Flag the backports whose upstream commit has fixes (Fixes: tags) in this branch "
+        "which were not backported, e.g. origin/master",
+    )
     parser.add_argument("range", help="Range of backported commits in format: base..branch")
     parser.add_argument(
         "paths", nargs="*", metavar="PATH", help="Limit to commits touching these paths"
