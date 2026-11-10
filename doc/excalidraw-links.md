@@ -11,3 +11,6 @@ https://excalidraw.com/#room=c9e6a7e5f629e369adc3,vaPL33Fb2ltECAaMmOEduw
 
 ## RISC-V APLIC-IMSIC
 https://excalidraw.com/#room=91f76c8cf65fd9b848fd,djt2EgBpYJQFvNaXJdcZ6w
+
+## AMD CCD pinning
+https://excalidraw.com/#room=ac1da5c479cfc595d572,TD4aNL2Qf125OuGOIYWe9g
