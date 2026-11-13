@@ -51,6 +51,7 @@ Issues = "https://github.com/xcp-ng/hypervisor-dev/issues"
 [project.scripts]
 git-review-rebase = "git_review_rebase.__main__:main"
 git-review-backports = "git_review_rebase.__main__:main_backports"
+git-spec-patches = "git_review_rebase.__main__:main_spec_patches"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/git_review_rebase"]
