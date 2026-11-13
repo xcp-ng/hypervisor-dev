@@ -59,6 +59,56 @@ def parse_args(argv: None | list[str] = None) -> argparse.Namespace:
     return _finalize_args(args)
 
 
+def parse_spec_patches_args(argv: None | list[str] = None) -> argparse.Namespace:
+    """Parse the git-spec-patches arguments and return them."""
+    parser = argparse.ArgumentParser(
+        prog="git-spec-patches",
+        description="Generate the Patch lines of a spec file, and their patch files, from a "
+        "patch-queue imported from a SRPM and its rebased version",
+    )
+    _add_common_args(parser)
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        required=True,
+        help="Directory to write the patch files to, e.g. the SOURCES directory of the SRPM",
+    )
+    parser.add_argument(
+        "--remote",
+        default="vates",
+        help="Remote to look for the XenServer branch the left branch is based on, whose tip "
+        "ends the XenServer patch-queue (default: vates)",
+    )
+    parser.add_argument(
+        "--end-xenserver-patchqueue",
+        default=None,
+        metavar="COMMIT",
+        help="Last commit of the XenServer patch-queue in the left range, the following commits "
+        "forming our own block (default: the tip of the XenServer branch found on --remote, "
+        "else the last abi-version commit, else the end of the left range)",
+    )
+    parser.add_argument(
+        "--ours-start",
+        type=int,
+        default=1000,
+        help="Index of the first Patch line of our own block (default: 1000)",
+    )
+    parser.add_argument(
+        "left_range", help="Imported patch-queue, starting at Patch0, in format: base..branch"
+    )
+    parser.add_argument("right_range", help="Rebased patch-queue in format: base..branch")
+    args = parser.parse_args(argv)
+
+    for r in (args.left_range, args.right_range):
+        start, sep, end = r.partition("..")
+        if not sep or not start or not end:
+            parser.error(f"range must be in format base..branch, got '{r}'")
+
+    args.paths = []
+    args.upstream_patchid_lookup = True
+    return _finalize_args(args)
+
+
 def parse_backports_args(argv: None | list[str] = None) -> argparse.Namespace:
     """Parse the git-review-backports arguments and return them."""
     parser = argparse.ArgumentParser(
