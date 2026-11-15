@@ -84,6 +84,9 @@ def warn(message: str) -> None:
 # Branches created by git-import-srpm, e.g. kernel/xcpng-4.19.19-8.0.46.17/patched.
 XCPNG_BRANCH = re.compile(r"^(?P<product>.+)/xcpng-(?P<version>[^/]+)/patched$")
 
+# Number git format-patch prefixes patch file names with.
+PATCH_NUMBER = re.compile(r"^[0-9]+-")
+
 # Title of the last commit of the XenServer kernel patch-queue.
 ABI_VERSION_TITLE = "abi-version"
 
@@ -314,15 +317,28 @@ class SpecPatches:
         return self.xs_entries + self.ours_entries
 
     def export(self, output_dir: str) -> None:
-        """Write the patch file of each exported entry, numbered after its spec index.
+        """Write the patch file of each exported entry, named after its commit title only.
 
-        Nothing is written to output_dir unless all patches could be generated, and existing
-        files are never overwritten."""
+        Names do not depend on the spec index, so that a patch keeps its name across exports as
+        long as its title does not change.  Nothing is written to output_dir unless all patches
+        could be generated with distinct names, and existing files are never overwritten."""
         exported = [entry for entry in self.entries() if entry.commit is not None]
+        by_name: dict[str, SpecEntry] = {}
         with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_paths: dict[int, str] = {}
             for entry in exported:
                 assert entry.commit is not None
-                entry.filename = self.format_patch(entry.commit, entry.index, tmp_dir)
+                # One directory per patch, as names can collide before being checked below.
+                entry_dir = os.path.join(tmp_dir, str(entry.index))
+                tmp_paths[entry.index] = self.format_patch(entry.commit, entry_dir)
+                entry.filename = PATCH_NUMBER.sub("", os.path.basename(tmp_paths[entry.index]))
+                other = by_name.setdefault(entry.filename, entry)
+                if other is not entry:
+                    assert other.commit is not None
+                    raise SpecPatchesError(
+                        f"Patch{other.index} {describe(other.commit)} and Patch{entry.index} "
+                        f"{describe(entry.commit)} would both be written to {entry.filename}"
+                    )
             existing = [
                 e.filename for e in exported if os.path.exists(os.path.join(output_dir, e.filename))
             ]
@@ -333,12 +349,10 @@ class SpecPatches:
                 )
             os.makedirs(output_dir, exist_ok=True)
             for entry in exported:
-                shutil.move(
-                    os.path.join(tmp_dir, entry.filename), os.path.join(output_dir, entry.filename)
-                )
+                shutil.move(tmp_paths[entry.index], os.path.join(output_dir, entry.filename))
 
-    def format_patch(self, commit: pygit2.Commit, index: int, output_dir: str) -> str:
-        """Run git format-patch on the commit, numbered after its index, and return the name."""
+    def format_patch(self, commit: pygit2.Commit, output_dir: str) -> str:
+        """Run git format-patch on the commit and return the path of the patch file."""
         # Stable output regardless of the user's configuration (format.signOff, format.notes,
         # format.useAutoBase, format.suffix, diff.noprefix...): the commit exactly as it is, without
         # its sha1 nor the git version, a/ and b/ prefixes for patch -p1, a single [PATCH] prefix.
@@ -359,14 +373,12 @@ class SpecPatches:
             "--suffix=.patch",
             "--src-prefix=a/",
             "--dst-prefix=b/",
-            "--start-number",
-            str(index),
             "-o",
             output_dir,
             str(commit.id),
         ]
         path = subprocess.run(command, capture_output=True, text=True, check=True).stdout.strip()
-        return os.path.basename(path)
+        return path
 
 
 def main(args: argparse.Namespace) -> int:
