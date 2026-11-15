@@ -119,7 +119,7 @@ the SRPM by `git-import-srpm`, whose commits are in the order of the `Patch` lin
 
   | Left commit                     | Spec line                                       |
   | ------------------------------- | ----------------------------------------------- |
-  | Rebased                         | `Patch42: 0042-<title>.patch`, re-exported      |
+  | Rebased                         | `Patch42: <title>.patch`, re-exported           |
   | Already present in the new base | `# Patch42: <upstream sha1> ("<upstream title>")` |
   | Dropped                         | `# Patch42: TODO ("<title>")`, to be filled in  |
 
@@ -138,13 +138,14 @@ numbered from `--ours-start` in the order they are applied on the right. Commits
 the right must come after the XenServer block, and the rebased commits must keep their order: the
 tool refuses to generate anything otherwise.
 
-The `Patch` lines are printed on the standard output, and a summary listing the `TODO` lines and
-the commits matched upstream on their title only, which are worth double checking, on the
-standard error. Patches are generated with `git format-patch` regardless of the user's
-configuration, and existing files are never overwritten. Once the spec file is updated, importing
-the SRPM with `git-import-srpm` should give the same commits as the rebased branch, except for
-commits whose message does not start with a single title line: `git am` joins their first
-paragraph into one title line.
+The `Patch` lines are printed on the standard output, and a summary listing the `TODO` lines and the
+commits matched upstream on their title only, which are worth double checking, on the standard
+error. Patches are generated with `git format-patch` regardless of the user's configuration, and
+named after their commit title only, so that they keep their name across exports: the tool aborts if
+two patches would get the same name. Existing files are never overwritten. Once the spec file is
+updated, importing the SRPM with `git-import-srpm` should give the same commits as the rebased
+branch, except for commits whose message does not start with a single title line: `git am` joins
+their first paragraph into one title line.
 
 ## Development
 
