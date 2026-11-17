@@ -147,7 +147,12 @@ function generate_table() {
         local xs_base xs_ea extra=""
         xs_base="$(jq -r --arg p "$pkg" '.[$p].xs_base // ""' <<< "$meta_json")"
         xs_ea="$(jq -r --arg p "$pkg" '.[$p].xs_earlyaccess // ""' <<< "$meta_json")"
-        [ -n "${default_installed[$pkg]:-}" ] || extra="📥"
+        # Without a main package, the default driver is the in-kernel one.
+        if [ -z "$normal_raw" ]; then
+            normal="🐧 in-kernel"
+        elif [ -z "${default_installed[$pkg]:-}" ]; then
+            extra="📥"
+        fi
 
         echo "| $pkg $extra | $normal | $alt | $xs_base | $xs_ea |"
     done <<< "$packages"
@@ -172,6 +177,7 @@ function generate_table() {
         echo ""
 	echo "> [!NOTE]"
 	echo "> 📥 other driver (needs manual installation)</br>"
+	echo "> 🐧 driver shipped in the kernel package</br>"
 	echo "> 📜 driver source code</br>"
 	echo "> 💿 driver disk available for this exact version</br>"
 	echo "> 💾 driver disk available for an older version</br>"
