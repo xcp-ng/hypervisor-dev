@@ -95,6 +95,17 @@ jobs:
             fi
           done
 
+          # vendor-drivers lists the drivers installed by default
+          submodule=drivers/8.3/vendor-drivers
+          git -C "$submodule" fetch origin 8.3
+          local_sha=$(git -C "$submodule" rev-parse HEAD)
+          remote_sha=$(git -C "$submodule" rev-parse origin/8.3)
+          if [ "$local_sha" != "$remote_sha" ]; then
+            git -C "$submodule" checkout --detach origin/8.3
+            echo "  $submodule: $local_sha -> $remote_sha"
+            updated+=("$submodule")
+          fi
+
           if [ ${#updated[@]} -gt 0 -o ${#missing_sources[@]} -gt 0 -o ${#updated_sources[@]} -gt 0 ]; then
             echo "updated=true" >> "$GITHUB_OUTPUT"
             printf '%s\n' "${updated[@]}" > /tmp/updated-submodules.txt

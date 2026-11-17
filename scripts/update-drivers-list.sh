@@ -6,6 +6,9 @@ DRIVERS_DIR="$(dirname "$0")/../drivers/"
 DRIVER_DISKS_DIR="$(dirname "$0")/../driver-disks/"
 OUTPUT="$DRIVERS_DIR/README.md"
 
+# uname -r of the XCP-ng 8.3 kernel, used to evaluate kernel-dependent specs.
+KERNEL_VERSION="4.19.0+1"
+
 function get_driver_disk_icon() {
     local pkg="$1" ver="$2" xcpng_ver="$3"
     local cfgs=("$DRIVER_DISKS_DIR"/*-"${xcpng_ver}".cfg)
@@ -41,7 +44,12 @@ function get_driver_disk_icon() {
 
 function get_version() {
     local specfile="$1"
-    rpmspec --query --define 'kernel_version 4.19.0' --qf '%{Version}-%{Release}\n' "$specfile" 2>/dev/null | head -1 ||:
+    rpmspec --query --define "kernel_version $KERNEL_VERSION" --qf '%{Version}-%{Release}\n' "$specfile" 2>/dev/null | head -1 ||:
+}
+
+function get_rpm_names() {
+    local specfile="$1"
+    rpmspec --query --define "kernel_version $KERNEL_VERSION" --qf '%{Name}\n' "$specfile" 2>/dev/null ||:
 }
 
 function generate_table() {
@@ -57,6 +65,20 @@ function generate_table() {
     [ -f "$metadata_file" ] && \
         meta_json="$(python3 -c "import yaml,json,sys; print(json.dumps(yaml.safe_load(open(sys.argv[1])) or {}))" "$metadata_file")"
 
+    # Packages installed by default are the ones vendor-drivers Requires.
+    local vendor_spec="$version_dir/vendor-drivers/SPECS/vendor-drivers.spec"
+    declare -A vendor_requires=()
+    local req
+    if [ -f "$vendor_spec" ]; then
+        while read -r req _; do
+            vendor_requires["$req"]=1
+        done < <(rpmspec --query --requires --define "kernel_version $KERNEL_VERSION" "$vendor_spec" 2>/dev/null)
+    else
+        echo "warning: $vendor_spec not found, no driver will be marked as installed by default" >&2
+    fi
+
+    declare -A default_installed=()
+    declare -A matched_requires=()
     declare -A normal_vers
     declare -A alt_vers
     declare -a all_packages
@@ -78,7 +100,19 @@ function generate_table() {
         else
             normal_vers["$dirname"]="$ver"
             all_packages+=("$dirname")
+
+            local rpm_name
+            while read -r rpm_name; do
+                [ -n "${vendor_requires[$rpm_name]:-}" ] || continue
+                default_installed["$dirname"]=1
+                matched_requires["$rpm_name"]=1
+            done < <(get_rpm_names "$specfile")
         fi
+    done
+
+    for req in "${!vendor_requires[@]}"; do
+        [ -n "${matched_requires[$req]:-}" ] || \
+            echo "warning: vendor-drivers requires '$req' which no package in $srpm_dir provides" >&2
     done
 
     # Deduplicate and sort package names
@@ -113,7 +147,7 @@ function generate_table() {
         local xs_base xs_ea extra=""
         xs_base="$(jq -r --arg p "$pkg" '.[$p].xs_base // ""' <<< "$meta_json")"
         xs_ea="$(jq -r --arg p "$pkg" '.[$p].xs_earlyaccess // ""' <<< "$meta_json")"
-        [ "$(jq -r --arg p "$pkg" '.[$p].default_installed // false' <<< "$meta_json")" = "true" ] || extra="📥"
+        [ -n "${default_installed[$pkg]:-}" ] || extra="📥"
 
         echo "| $pkg $extra | $normal | $alt | $xs_base | $xs_ea |"
     done <<< "$packages"
