@@ -271,3 +271,7 @@
 [submodule "drivers/8.3/source/qlogic-fastlinq-alt_8_42"]
 	path = drivers/8.3/source/qlogic-fastlinq-alt_8_42
 	url = git@github.com:xcp-ng/driver-sources.git
+[submodule "drivers/8.3/vendor-drivers"]
+	path = drivers/8.3/vendor-drivers
+	url = git@github.com:xcp-ng-rpms/vendor-drivers.git
+	branch = 8.3
