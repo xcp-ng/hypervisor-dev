@@ -271,3 +271,9 @@
 [submodule "drivers/8.3/source/qlogic-fastlinq-alt_8_42"]
 	path = drivers/8.3/source/qlogic-fastlinq-alt_8_42
 	url = git@github.com:xcp-ng/driver-sources.git
+[submodule "drivers/8.3/srpm/r8125-module-alt"]
+	path = drivers/8.3/srpm/r8125-module-alt
+	url = git@github.com:xcp-ng-rpms/r8125-module-alt.git
+[submodule "drivers/8.3/source/r8125-module-alt"]
+	path = drivers/8.3/source/r8125-module-alt
+	url = git@github.com:xcp-ng/driver-sources.git
