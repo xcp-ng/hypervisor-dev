@@ -275,3 +275,9 @@
 	path = drivers/8.3/vendor-drivers
 	url = git@github.com:xcp-ng-rpms/vendor-drivers.git
 	branch = 8.3
+[submodule "drivers/8.3/srpm/r8125-module-alt"]
+	path = drivers/8.3/srpm/r8125-module-alt
+	url = git@github.com:xcp-ng-rpms/r8125-module-alt.git
+[submodule "drivers/8.3/source/r8125-module-alt"]
+	path = drivers/8.3/source/r8125-module-alt
+	url = git@github.com:xcp-ng/driver-sources.git
